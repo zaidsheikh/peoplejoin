@@ -1,5 +1,7 @@
 # Experiment Scripts
 
+<img src="../../resources/peoplejoin_sketch.png" alt="PeopleJoin" width="900">
+
 ## Create configurations
 `python workspace/peoplejoin-qa/create_peoplejoinqa_configs.py --split test`
 

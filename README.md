@@ -1,6 +1,10 @@
+
+<img src="./resources/peoplejoin_designer.jpeg" alt="PeopleJoin" width="300">
+
 ## PeopleJoin
 
 PEOPLEJOIN is a benchmark for evaluating LM-mediated collaborative problem solving. Given a user request, PEOPLEJOIN agents must identify teammates who might be able to assist, converse with these teammates to gather information, and finally compile a useful answer or summary for the original user. PEOPLEJOIN comprises two evaluation domains: PEOPLEJOIN-QA, focused on questions about tabular data, and PEOPLEJOIN-DOCCREATION, focused on document creation tasks. The two domains are adapted from existing NLP benchmarks for database question answering and multi-document summarization; here, however, the information needed to complete these tasks is distributed across synthetic “organizations” of 2–20 users, simulating natural multi-user collaboration scenarios. We implemented several popular LM agent architectures, and report their accuracy and efficiency at completing tasks.
+
 
 ## Setup
 
