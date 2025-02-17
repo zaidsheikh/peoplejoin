@@ -37,6 +37,7 @@ PEOPLEJOIN is a benchmark for evaluating LM-mediated collaborative problem solvi
 ## Project structure
 - `src/`: Python code for the project.
 - `tests/`: Unit tests for code in `src/`.
+- `data/`: Releant data files
 
 
 ## Contributing
