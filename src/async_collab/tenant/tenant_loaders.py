@@ -17,8 +17,8 @@ class TenantLoader:
         if tenant_id not in TenantLoader.tenant_id_to_path:
             raise ValueError(f"Tenant with id {tenant_id} not found.")
         loader = TenantLoader.tenant_id_to_loader.get(tenant_id, "from_dict")
-        if loader == "load_peoplejoinqa_v2":
-            return TenantLoader.load_peoplejoinqa_v2(tenant_id)
+        if loader == "load_peoplejoin_tenant":
+            return TenantLoader.load_peoplejoin_tenant(tenant_id)
         elif loader == "from_dict":
             path = TenantLoader.tenant_id_to_path[tenant_id]
             return Tenant.from_dict(jsons.load(path))
@@ -35,7 +35,7 @@ class TenantLoader:
         cls.tenant_id_to_loader[tenant_id] = loader_func
 
     @staticmethod
-    def load_peoplejoinqa_v2(tenant_id: str) -> Tenant:
+    def load_peoplejoin_tenant(tenant_id: str) -> Tenant:
         # 2024-11-09 23:36:58,478 - general - INFO - [TenantLoader] [load_peoplejoinqa_v2] Loaded tenant data has following keys: dict_keys(['tenant_id', 'primary_user', 'users', 'user_id_to_documents', 'user_id_to_descriptions', 'user_id_to_table_names', 'user_id_to_descriptions_templated', 'user_id_to_descriptions_lowprecision', 'user_id_to_descriptions_lowprecision_templated'])
         pth = TenantLoader.tenant_id_to_path[tenant_id]
         general_logger.info(
@@ -90,8 +90,14 @@ for tenant in ["battle_death"]:
     TenantLoader.register_tenant_with_loader(
         f"peoplejoinqa/{tenant}",
         f"data/peoplejoin-qa/tenant_data_v2/{tenant}.json",
-        "load_peoplejoinqa_v2",
+        "load_peoplejoin_tenant",
     )
+
+TenantLoader.register_tenant_with_loader(
+    "multinews_dummy_tenant",
+    "data/peoplejoin-doc-creation/tenants/val_0.json",
+    "load_peoplejoin_tenant",
+)
 
 # register peoplejoinqa tenants
 with open("data/peoplejoin-qa/test.jsonl") as f:
@@ -102,5 +108,19 @@ tenant_ids = list({data["tenant_id"] for data in test_data})
 for tenant_id in tenant_ids:
     # print(f"Registering tenant {tenant_id}")
     TenantLoader.register_tenant_with_loader(
-        f"{tenant_id}", f"data/peoplejoin-qa/{tenant_id}.json", "load_peoplejoinqa_v2"
+        f"{tenant_id}", f"data/peoplejoin-qa/{tenant_id}.json", "load_peoplejoin_tenant"
+    )
+
+# register peoplejoindoccreation tenants
+with open("data/peoplejoin-doc-creation/test.scenario.jsonl") as f:
+    tenants = [json.loads(line) for line in f]
+with open("data/peoplejoin-doc-creation/val.scenario.jsonl") as f:
+    tenants += [json.loads(line) for line in f]
+tenant_ids = list({data["tenant_id"] for data in tenants})
+for tenant_id in tenant_ids:
+    _, tenant_filename = tenant_id.split("/")
+    TenantLoader.register_tenant_with_loader(
+        f"{tenant_id}",
+        f"data/peoplejoin-doc-creation/tenants/{tenant_filename}.json",
+        "load_peoplejoin_tenant",
     )
