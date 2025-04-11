@@ -18,7 +18,7 @@ def tenant_data_path_generator(tenant_id: str) -> str:
 _PRIMARY_USER_DICT = {
     "user_id": "alice",
     "full_name": "Alice Anastasiou",
-    "email": "alice@contoso.com",
+    "email": "alice@company.com",
 }
 
 PRIMARY_USER = Person.from_dict(_PRIMARY_USER_DICT)
@@ -27,17 +27,17 @@ _OTHER_USERS_DICT = [
     {
         "user_id": "bhushan",
         "full_name": "Bhushan Magar",
-        "email": "bhushan@contoso.com",
+        "email": "bhushan@company.com",
     },
-    {"user_id": "cassie", "full_name": "Cassie Hicks", "email": "cassie@contoso.com"},
-    {"user_id": "hannah", "full_name": "Hannah Jarvis", "email": "hannah@contoso.com"},
-    {"user_id": "dewei", "full_name": "Dewei Peng", "email": "dewei@contoso.com"},
-    {"user_id": "eden", "full_name": "Eden Berhe", "email": "eden@contoso.com"},
-    {"user_id": "parker", "full_name": "Parker McLean", "email": "parker@contoso.com"},
+    {"user_id": "cassie", "full_name": "Cassie Hicks", "email": "cassie@company.com"},
+    {"user_id": "hannah", "full_name": "Hannah Jarvis", "email": "hannah@company.com"},
+    {"user_id": "dewei", "full_name": "Dewei Peng", "email": "dewei@company.com"},
+    {"user_id": "eden", "full_name": "Eden Berhe", "email": "eden@company.com"},
+    {"user_id": "parker", "full_name": "Parker McLean", "email": "parker@company.com"},
     {
         "user_id": "farshid",
         "full_name": "Farshid Kamangar",
-        "email": "farshid@contoso.com",
+        "email": "farshid@company.com",
     },
 ]
 
