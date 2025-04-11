@@ -43,8 +43,6 @@ class AsyncCollabTenantData:
                 "user_id_to_descriptions_lowprecision_templated", {}
             ),
         )
-        # return jsons.loads(f.read(), cls=AsyncCollabTenantData)
-        # TODO: using `jsons.loads(f.read(), cls=AsyncCollabTenantData)` errors out with `jsons.exceptions.DeserializationError...`; need to investigate why. using a custom deserialization method for now.
 
     def get_documents_for_a_user(self, user_id: str) -> list[Document]:
         return self.user_id_to_documents[user_id]
