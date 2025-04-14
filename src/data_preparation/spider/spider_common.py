@@ -4,66 +4,11 @@ from typing import Any
 
 import jsons
 
-from async_collab.core.document import Document
 from async_collab.core.person import Person
 from data_preparation.utils import find_tables_in_sql_query, normalize_table_name
+from src.data_preparation.common import AsyncCollabTenantData, DatumAttributes
 
 ####
-
-
-@dataclass
-class AsyncCollabTenantData:
-    tenant_id: str
-    primary_user: Person
-    users: list[Person]
-    user_id_to_documents: dict[str, list[Document]]
-    user_id_to_descriptions: dict[str, str]
-    user_id_to_table_names: dict[str, list[str]] = field(default_factory=dict)
-    user_id_to_descriptions_templated: dict[str, str] = field(default_factory=dict)
-    user_id_to_descriptions_lowprecision: dict[str, str] = field(default_factory=dict)
-    user_id_to_descriptions_lowprecision_templated: dict[str, str] = field(
-        default_factory=dict
-    )
-
-    @staticmethod
-    def load_from_file(file_path: str) -> "AsyncCollabTenantData":
-        with open(file_path) as f:
-            json_content = json.load(f)
-        return AsyncCollabTenantData(
-            tenant_id=json_content["tenant_id"],
-            primary_user=Person.from_dict(json_content["primary_user"]),
-            users=[Person.from_dict(user) for user in json_content["users"]],
-            user_id_to_documents={
-                user_id: [Document.from_dict(doc) for doc in docs]
-                for user_id, docs in json_content["user_id_to_documents"].items()
-            },
-            user_id_to_descriptions=json_content["user_id_to_descriptions"],
-            user_id_to_table_names=json_content.get("user_id_to_table_names", {}),
-            user_id_to_descriptions_lowprecision=json_content.get(
-                "user_id_to_descriptions_lowprecision", {}
-            ),
-            user_id_to_descriptions_templated=json_content.get(
-                "user_id_to_descriptions_templated", {}
-            ),
-            user_id_to_descriptions_lowprecision_templated=json_content.get(
-                "user_id_to_descriptions_lowprecision_templated", {}
-            ),
-        )
-        # return jsons.loads(f.read(), cls=AsyncCollabTenantData)
-        # TODO: using `jsons.loads(f.read(), cls=AsyncCollabTenantData)` errors out with `jsons.exceptions.DeserializationError...`; need to investigate why. using a custom deserialization method for now.
-
-    def get_documents_for_a_user(self, user_id: str) -> list[Document]:
-        return self.user_id_to_documents[user_id]
-
-    def get_all_documents(self) -> list[Document]:
-        return [doc for docs in self.user_id_to_documents.values() for doc in docs]
-
-
-@dataclass
-class DatumAttributes:
-    datum_requires_accessing_subtable_division: bool = False
-    datum_requires_redirection_handling: bool = False
-    datum_is_unanswerable: bool = False
 
 
 @dataclass
@@ -136,26 +81,6 @@ class AsyncCollabSpider:
         # in future, we can use a more sophisticated method to extract table names
         table_names = find_tables_in_sql_query(self.gold_sql_query)
         return list(table_names)
-
-
-@dataclass
-class AsyncCollabMultiNews:
-    datum_id: str
-    tenant_id: str
-    summary_prompt: str
-    gold_summary: str
-    gold_document_ids: list[str]
-
-    @staticmethod
-    def from_dict(json_content: dict) -> "AsyncCollabMultiNews":
-        # TODO(jda): add gold_people to evaluate whether the right set of users was contacted
-        return AsyncCollabMultiNews(
-            datum_id=json_content["datum_id"],
-            tenant_id=json_content["tenant_id"],
-            summary_prompt=json_content["summary_prompt"],
-            gold_summary=json_content["gold_summary"],
-            gold_document_ids=json_content["gold_document_ids"],
-        )
 
 
 ### Database related

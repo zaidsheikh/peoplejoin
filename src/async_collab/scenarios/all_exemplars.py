@@ -31,6 +31,18 @@ from async_collab.scenarios.people_join_qa.data.peoplejoinqa_exemplars_messageno
     infoseeking_spider_v2_c_unanswerable_messagenone,
     infoseeking_spider_v2_d_unanswerable_refineques_messagenone,
 )
+from async_collab.scenarios.peoplejoin_doc_creation.data.peoplejoindoccreation_exemplars import (
+    multinews_all_dialogue1,
+    multinews_all_dialogue2,
+    multinews_dialogue1,
+    multinews_dialogue2,
+    multinews_dialogue3,
+    multinews_nocot_dialogue1,
+    multinews_nocot_dialogue2,
+    multinews_nocot_dialogue3,
+    multinews_none_dialogue1,
+    multinews_none_dialogue2,
+)
 
 bot = Bot(owner=Person("1", "Alice", "alice@company.com"))
 example1 = AsyncCollabDatum(
@@ -99,4 +111,14 @@ exemplar_by_id: dict[str, AsyncCollabDatum | str] = {
     "peoplejoinqa_messagenone_2": infoseeking_spider_v2_b_splittables_messagenone,
     "peoplejoinqa_messagenone_3": infoseeking_spider_v2_c_unanswerable_messagenone,
     "peoplejoinqa_messagenone_4": infoseeking_spider_v2_d_unanswerable_refineques_messagenone,
+    "peoplejoindoccreation_1": multinews_dialogue1,
+    "peoplejoindoccreation_2": multinews_dialogue2,
+    "peoplejoindoccreation_3": multinews_dialogue3,
+    "peoplejoindoccreation_1_nocot": multinews_nocot_dialogue1,
+    "peoplejoindoccreation_2_nocot": multinews_nocot_dialogue2,
+    "peoplejoindoccreation_3_nocot": multinews_nocot_dialogue3,
+    "peoplejoindoccreation_messageall_1": multinews_all_dialogue1,
+    "peoplejoindoccreation_messageall_2": multinews_all_dialogue2,
+    "peoplejoindoccreation_messagenone_1": multinews_none_dialogue1,
+    "peoplejoindoccreation_messagenone_2": multinews_none_dialogue2,
 }
