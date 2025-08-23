@@ -21,12 +21,13 @@ console_handler.setFormatter(formatter)
 general_logger.addHandler(general_file_handler)
 general_logger.addHandler(console_handler)
 
+os.makedirs("logs", exist_ok=True)
 
 # Configure the prompt logger for logging created prompts
 prompt_logger = logging.getLogger("prompt")
 prompt_logger.setLevel(logging.INFO)
 
-prompt_file_handler = logging.FileHandler("logs/prompt.log", mode="w")
+prompt_file_handler = logging.FileHandler("logs/prompt.log", mode="a")
 prompt_file_handler.setLevel(logging.INFO)
 
 prompt_formatter = logging.Formatter(

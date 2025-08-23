@@ -1,9 +1,10 @@
+import os
 from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
 class DemoSettings:
-    backend_port: int = 8000
+    backend_port: int = int(os.environ.get("BACKEND_PORT", 8000))
     frontend_port: int = 3000  # TODO: use this port in the frontend
     backend_host: str = "localhost"
     clear_endpoint: str = "/clear"

@@ -21,6 +21,7 @@ from async_collab.tenant.tenant_loaders import TenantLoader
 from experimentation.sim_hitl_exp_config import ExpSimulHitlConfig
 from experimentation.simulated_user import UserSimulator
 from logging_config import simulated_user_logger
+import traceback
 
 
 class TimeoutException(Exception):
@@ -74,9 +75,7 @@ class DialogManager:
         self.bot: Bot = Bot(
             owner=self.main_user
         )  # TODO: can move bot property from Agent to Config to avoid this duplication
-        self.llm_client = get_llm_client(
-            default_model="dev-gpt-4-turbo"
-        )  # Setting model here: TODO: make it a param; "dev-gpt-4o-2024-05-13", "dev-gpt-4-turbo"
+        self.llm_client = get_llm_client(default_model=exp_config.agent_config.model_config.model)
         participant_id_to_hitl_mode = exp_config.participant_id_to_hitl_mode
         simulated_user_logger.info(
             f"[experiment_with_hitl_or_simulation] Loading mock tenant from config {exp_config.tenant_id}"
@@ -243,6 +242,8 @@ class DialogManager:
             except KeyboardInterrupt:
                 print("Process interrupted by user! Will proceed to saving")
             except Exception as e:
+                # print stacktrace
+                traceback.print_exc()
                 print(f"Error: {e}")
             finally:
                 # We save here while the websocket is still open, because the data is cleaned up when ws closes
@@ -270,7 +271,11 @@ class DialogManager:
 if __name__ == "__main__":
     config_name = sys.argv[1]  # experiment config json file
     save_folder = sys.argv[2]  # folder to save the outputs
+    for envvar in ["LITELLM_API_KEY", "LITELLM_BASE_URL"]:
+        if not os.environ.get(envvar):
+            print(f"WARNING: {envvar} environment variable is not set")
     assert os.path.exists(config_name), f"Config file {config_name} not found"
+    os.makedirs(save_folder, exist_ok=True)
     with open(config_name) as f:
         config_json = json.load(f)
         exp_config = ExpSimulHitlConfig.sim_config_builder(**config_json)

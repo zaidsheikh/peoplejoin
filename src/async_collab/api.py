@@ -14,6 +14,9 @@ from async_collab.orchestrator.datum import AsyncCollabDatumMetadata
 from logging_config import general_logger
 
 
+BACKEND_PORT = int(os.environ.get("BACKEND_PORT", 8000))
+
+
 class App:
     """
     App is the core entrypoint of the backend of the application.
@@ -134,4 +137,4 @@ def app(conf_name: str | None = None):
 
 if __name__ == "__main__":
     print("Running the app")
-    app().run(port=8000)
+    app().run(port=BACKEND_PORT)

@@ -92,6 +92,8 @@ class ReactiveOrchestrator(Orchestrator):
                 max_error_count -= 1
                 continue
 
+            next_action = re.sub(r"(```|`)+$", "", re.sub(r"^(>>>|#|```python|```|`)+", "", next_action.strip())).strip()
+
             # Execute the action (parsed LLM response)
             result = self.execute_action(next_action)
 
@@ -185,6 +187,7 @@ class ReactiveOrchestrator(Orchestrator):
             tool_implementations = self.tool_implementations
 
         action = action.strip()
+
         general_logger.info(
             f"[ReactiveOrchestrator] [execute_action] action=`{action}`"
         )

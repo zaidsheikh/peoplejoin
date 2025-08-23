@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import random
 import random
@@ -8,6 +9,7 @@ from data_preparation.spider.spider_common import AsyncCollabSpider, AsyncCollab
 random.seed(42)
 
 workspace_path = "workspace/peoplejoin-qa/experiments"
+os.makedirs(workspace_path, exist_ok=True)
 dev_file_path = "data/peoplejoin-qa/dev.jsonl"
 test_file_path = "data/peoplejoin-qa/test.jsonl"
 exemplar_dialogue_ids = ["peoplejoinqa_1", "peoplejoinqa_2", "peoplejoinqa_3","peoplejoinqa_4"]
@@ -20,18 +22,28 @@ false = False
 
 LLM_MODEL_CONFIGS = {
   "gpt-4o-2024-05-13": {
-    "name": "dev-gpt-4o-2024-05-13",
-    "context_window": 12000,
-    "token_encoding": "o200k_base"
+    "name": "neulab/gpt-4o-2024-05-13",
+    # "name": "neulab/gpt-4.1-nano-2025-04-14",
+    # "name": "dev-gpt-4o-2024-05-13",
+    # "context_window": 12000,
+    # "token_encoding": "o200k_base"
   },
   "gpt-4-turbo": {
       "name": "dev-gpt-4-turbo",
       "context_window": 30000
   },
   "phi-3-medium": {
-      "name": "dev-phi-3-medium-128k-instruct",
+      "name": "microsoft/Phi-3-medium-128k-instruct",
       "context_window": 12000
   },
+  "qwen3-32B": {
+      "name": "Qwen/Qwen3-32B",
+      "context_window": 32000
+  },
+  "gemma-3-27b": {
+      "name": "google/gemma-3-27b-it",
+      "context_window": 128000
+  }
 }
 
 def get_agent_config_template(use_simple_cot: bool, 
@@ -125,6 +137,18 @@ def agent_config_path(tenant_id: str, llm_model: str, use_simple_cot: bool = fal
         case ("phi-3-medium", False):
             assert not (messageall or messagenone), f"Invalid llm_model = {llm_model} and use_simple_cot = {use_simple_cot} and messageall = {messageall} and messagenone = {messagenone}"
             return f"{workspace_path}/agent_configs/agentconf_{tenant_id_to_use}_phi3medium_nocot.json"                        
+        case ("qwen3-32B", True):
+            assert not (messageall or messagenone), f"Invalid llm_model = {llm_model} and use_simple_cot = {use_simple_cot} and messageall = {messageall} and messagenone = {messagenone}"
+            return f"{workspace_path}/agent_configs/agentconf_{tenant_id_to_use}_qwen3_32B.json"
+        case ("qwen3-32B", False):
+            assert not (messageall or messagenone), f"Invalid llm_model = {llm_model} and use_simple_cot = {use_simple_cot} and messageall = {messageall} and messagenone = {messagenone}"
+            return f"{workspace_path}/agent_configs/agentconf_{tenant_id_to_use}_qwen3_32B_nocot.json"
+        case ("gemma-3-27b", True):
+            assert not (messageall or messagenone), f"Invalid llm_model = {llm_model} and use_simple_cot = {use_simple_cot} and messageall = {messageall} and messagenone = {messagenone}"
+            return f"{workspace_path}/agent_configs/agentconf_{tenant_id_to_use}_gemma_3_27b.json"
+        case ("gemma-3-27b", False):
+            assert not (messageall or messagenone), f"Invalid llm_model = {llm_model} and use_simple_cot = {use_simple_cot} and messageall = {messageall} and messagenone = {messagenone}"
+            return f"{workspace_path}/agent_configs/agentconf_{tenant_id_to_use}_gemma_3_27b_nocot.json"
         case (_, _):
             raise ValueError(f"Invalid llm_model = {llm_model} and use_simple_cot = {use_simple_cot}")
 
@@ -324,7 +348,24 @@ def main():
               create_agent_config_file(datum.tenant_id, agent_config_path(tenant_id=datum.tenant_id, use_simple_cot=use_simple_cot, llm_model="phi-3-medium"), use_simple_cot=use_simple_cot, llm_model="phi-3-medium")
               agent_file_tracker[datum.tenant_id] = True
           print()
-  
+        
+    # # create agent config files with qwen3-32B and gemma
+    for llm_model in ["gemma-3-27b", "qwen3-32B"]:
+        for use_simple_cot in [false, true]:
+            agent_file_tracker = {}
+            print("use_simple_cot = ", use_simple_cot)
+            exp_file_dir = f"{workspace_path}/{llm_model}/{exp_configs_folder}" if use_simple_cot else f"{workspace_path}/{llm_model}_nocot/{exp_configs_folder}"
+            # create exp_file_dir if it does not exist
+            if not os.path.exists(exp_file_dir):
+                os.makedirs(exp_file_dir)
+            for i, datum in enumerate(selected_data):
+                print("datum = ", datum)
+                create_experiment_file(datum, f"{exp_file_dir}/experiment_{i}.json", use_simple_cot=use_simple_cot, llm_model=llm_model)
+                # create agent config file if not already created
+                if datum.tenant_id not in agent_file_tracker:
+                    create_agent_config_file(datum.tenant_id, agent_config_path(tenant_id=datum.tenant_id, use_simple_cot=use_simple_cot, llm_model=llm_model), use_simple_cot=use_simple_cot, llm_model=llm_model)
+                    agent_file_tracker[datum.tenant_id] = True
+            print()
 
 
 if __name__ == "__main__":

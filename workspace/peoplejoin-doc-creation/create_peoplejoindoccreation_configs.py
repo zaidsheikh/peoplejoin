@@ -10,6 +10,7 @@ from data_preparation.multinews.multinews_common import AsyncCollabMultiNews
 random.seed(42)
 
 workspace_path = "workspace/peoplejoin-doc-creation/experiments"
+os.makedirs(workspace_path, exist_ok=True)
 dev_file_path = "data/peoplejoin-doc-creation/val.scenario.jsonl"
 test_file_path = "data/peoplejoin-doc-creation/test.scenario.jsonl"
 exemplar_dialogue_ids = ["peoplejoindoccreation_1", "peoplejoindoccreation_2", "peoplejoindoccreation_3"]
@@ -22,16 +23,17 @@ false = False
 
 LLM_MODEL_CONFIGS = {
   "gpt-4o-2024-05-13": {
-    "name": "dev-gpt-4o-2024-05-13",
-    "context_window": 12000,
-    "token_encoding": "o200k_base"
+    # "name": "dev-gpt-4o-2024-05-13",
+    "name": "neulab/gpt-4.1-nano-2025-04-14",
+    # "context_window": 12000,
+    # "token_encoding": "o200k_base"
   },
   "gpt-4-turbo": {
       "name": "dev-gpt-4-turbo",
       "context_window": 30000
   },
   "phi-3-medium": {
-      "name": "dev-phi-3-medium-128k-instruct",
+      "name": "microsoft/Phi-3-medium-128k-instruct",
       "context_window": 12000
   },
 }
