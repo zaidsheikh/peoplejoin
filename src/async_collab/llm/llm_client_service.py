@@ -48,15 +48,23 @@ class MyLLMClient(LLMClient):
 
 
     def send_chat_request(self, request, model) -> dict:
-        messages = []
-        if len(request["system_instruction"]) > 0:
-            messages.append({"role": "system", "content": request["system_instruction"]})
-        messages.append({"role": "user", "content": request["prompt"]})
+        if request.get("messages"):
+            messages = request["messages"]
+        elif request.get("prompt"):
+            messages = []
+            if request.get("system_instruction"):
+                messages.append({"role": "system", "content": request["system_instruction"]})
+            messages.append({"role": "user", "content": request["prompt"]})
+        else:
+            raise ValueError("Either 'messages' or 'prompt' must be provided.")
 
-        response = self.client.chat.completions.create(
-            model=model,
-            messages=messages,
-        )
+        chat_params = {
+            "model": model,
+            "messages": messages,
+        }
+        if request.get("tools"):
+            chat_params["tools"] = request["tools"]
+        response = self.client.chat.completions.create(**chat_params)
         return response.model_dump()
 
 
@@ -120,6 +128,33 @@ class MyLLMClient(LLMClient):
         # return response["choices"][0]["message"]["content"]
         # print("[MyLLMClient] get_response_str response: " + response["choices"][0]["text"])
         return response["choices"][0]["text"]
+
+
+    def get_chat_response(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None = None,
+        temperature: float = 0,
+        max_tokens: int = 800,
+        top_p: float = 0.95,
+        stop: str | None = None,
+        model: str = "gpt-4-0125-preview",
+    ) -> str | None:
+        request_data = {
+            "messages": messages,
+            "tools": tools,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "top_p": top_p,
+            "n": 1,
+            "stream": False,
+            "logprobs": None,
+            "stop": stop,
+        }
+        response = self.send_chat_request(request_data, model=model)
+        if response is None or len(response) == 0 or len(response["choices"]) == 0:
+            return None
+        return response["choices"][0]["message"]["content"]
 
 
 llm_client: LLMClient | None = None

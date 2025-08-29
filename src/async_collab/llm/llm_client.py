@@ -18,7 +18,22 @@ class LLMClient:
     ) -> str | None:
         raise NotImplementedError
 
+    def get_chat_response(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None = None,
+        temperature: float = 0,
+        max_tokens: int = 800,
+        top_p: float = 0.95,
+        stop: str | None = None,
+        model: str = "gpt-4-0125-preview",
+    ) -> str | None:
+        raise NotImplementedError
+
     def send_request(self, request, model) -> dict:
+        raise NotImplementedError
+
+    def send_chat_request(self, request, model) -> dict:
         raise NotImplementedError
 
 

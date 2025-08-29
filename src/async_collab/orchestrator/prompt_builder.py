@@ -18,6 +18,7 @@ class PromptBuilder:
     plugins: list[Plugin]
     prompt: str
     cur_event_repl: str
+    tools: list[dict]
 
     def __init__(self, plugins: list[Plugin], exemplar_ids: list[str]) -> None:
         general_logger.info("[PromptBuilder] PromptBuilder.__init__")
@@ -71,6 +72,9 @@ class PromptBuilder:
 
     def get_cur_event_repl(self):
         return self.cur_event_repl
+
+    def get_tools(self) -> list[dict]:
+        return []
 
     def reset(self):
         """
