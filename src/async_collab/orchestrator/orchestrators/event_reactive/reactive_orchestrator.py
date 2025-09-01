@@ -52,9 +52,8 @@ class ReactiveOrchestrator(Orchestrator):
             "Reflection": {"thought": lambda thought: f"Thought: {thought}"},
         }
 
-    def init_prompt_builder(self, exemplar_ids: list[str]):
-        # self.prompt_builder = ReactivePromptBuilder(self.plugins, exemplar_ids)
-        self.prompt_builder = ChatCompletionPromptBuilder(self.plugins, exemplar_ids)
+    def init_prompt_builder(self, exemplar_ids: list[str], prompt_builder_cls: type = ChatCompletionPromptBuilder):
+        self.prompt_builder = prompt_builder_cls(self.plugins, exemplar_ids)
 
     def on_event(self, event: Message) -> str | None:
         event_prompt = event.as_prompt
@@ -67,10 +66,11 @@ class ReactiveOrchestrator(Orchestrator):
         Call the LLM to get the next action
         """
         assert self.llm_client is not None
-        self.prompt_builder.update_prompt(prefix="\n>>>")  # adds '>>>' to prompt
 
         prompt = self.prompt_builder.prompt
         if isinstance(prompt, str):
+            self.prompt_builder.update_prompt(prefix="\n>>>")  # adds '>>>' to prompt
+            prompt = self.prompt_builder.prompt
             prompt_logger.info(
                 f"[ReactiveOrchestrator] call_llm: prompt = {prompt}<PROMPTEND>"
             )
@@ -120,6 +120,7 @@ class ReactiveOrchestrator(Orchestrator):
                 max_error_count -= 1
                 # add a message to the prompt that the action was invalid
                 # write it in form of a python comment
+                self.prompt_builder.update_prompt(action=next_action)
                 self.prompt_builder.update_prompt(
                     error_msg=f" # Invalid action: `{next_action}`. Retry with valid action names and parameters. Ensure that prediction is within a single line and only valid plugins and tools are used."
                 )
@@ -127,7 +128,11 @@ class ReactiveOrchestrator(Orchestrator):
                     f"Invalid action: `{next_action}`. Retry with valid action names and parameters. Ensure that prediction is within a single line."
                 )
 
-            if next_action.strip().startswith("System.finish"):
+            if (
+                next_action.strip().startswith("System.finish") or
+                next_action.strip().startswith("Enterprise.send_message") or
+                next_action.strip().startswith("Enterprise.send_session_completed")
+            ):
                 # print("System finish called. Exiting loop.")
                 general_logger.info("System finish called. Exiting loop.")
                 loop_active = False

@@ -1,3 +1,5 @@
+import re
+import json
 import os
 import string
 from datetime import datetime
@@ -30,41 +32,65 @@ def format_date_time(date_time: datetime) -> str:
 class UserSimulatorPromptBuilder:
     instructions: str
     description: str
+    use_chat_completion_api: bool
 
     # This is simple enough for now; if more additions are made, consider adding a unit test
 
-    def __init__(self, instructions: str, description: str):
+    def __init__(self, instructions: str, description: str, use_chat_completion_api: bool):
         self.instructions = instructions
         self.description = description
+        self.use_chat_completion_api = use_chat_completion_api
 
     def __call__(
         self,
         messages_history: list[Message],
         user_name: str,
         documents: list[Document] | None = None,
-    ) -> str:
+        use_chat_completion_api: bool = True,
+    ) -> str | list[dict]:
         """
         This method builds a prompt for the user simulator based on the messages history and the description of the user
         """
-        prompt: list[str] = []
-        prompt.append(self.instructions + "\n")
-        prompt.append(f"### User Description: {self.description} \n")
-        prompt.append(
-            f"### Info: Today's date is {format_date_time(datetime.now())}.\n"
-        )  # todo: load from config
-        if documents:
-            prompt.append("### User Documents:\n")
-            prompt.extend(repr_documents(documents))
-            # todo: might have to truncate later on if the content is too long
-        prompt.append("### Messages History: \n")
-        for message in messages_history:
-            if isinstance(message.sender, Bot):
-                prompt.append(f"Bot: {message.content}\n")
-            else:
-                prompt.append(f"{message.sender.full_name}: {message.content}\n")
-        prompt.append("### Next Response:\n")
-        prompt.append(f"{user_name}:")
-        return "".join(prompt)
+        if use_chat_completion_api:
+            # Replace full word 'Bot' with 'user' in the description using regex
+            messages = [{"content": f"You are {user_name}. {self.description} \n" + self.instructions, "role": "system"}]
+            # Build content for the second message
+            data = []
+            data.append(
+                f"### Info: Today's date is {format_date_time(datetime.now())}.\n"
+            )  # todo: load from config
+            if documents:
+                data.append("### User Documents:\n")
+                data.extend(repr_documents(documents))
+                # todo: might have to truncate later on if the content is too long
+            messages += [{"content": f"{''.join(data)}\n", "role": "user"}]
+            for message in messages_history:
+                if isinstance(message.sender, Bot):
+                    messages += [{"content": f"Bot: {message.content}\n", "role": "user"}]
+                else:
+                    messages += [{"content": f"{message.sender.full_name}: {message.content}\n", "role": "assistant"}]
+            return messages
+        else:
+            # Original string-based prompt format
+            prompt: list[str] = []
+            prompt.append(self.instructions + "\n")
+            prompt.append(f"### User Description: {self.description} \n")
+            prompt.append(
+                f"### Info: Today's date is {format_date_time(datetime.now())}.\n"
+            )  # todo: load from config
+            if documents:
+                prompt.append("### User Documents:\n")
+                prompt.extend(repr_documents(documents))
+                # todo: might have to truncate later on if the content is too long
+            prompt.append("### Messages History: \n")
+            for message in messages_history:
+                if isinstance(message.sender, Bot):
+                    prompt.append(f"Bot: {message.content}\n")
+                else:
+                    prompt.append(f"{message.sender.full_name}: {message.content}\n")
+            prompt.append("### Next Response:\n")
+            prompt.append(f"{user_name}:")
+            return "".join(prompt)
 
 
 translator = str.maketrans("", "", string.punctuation)
@@ -96,6 +122,7 @@ class UserSimulator:
     doc_search: DocumentCollection | None
     stop_token: str
     is_main_user: bool
+    use_chat_completion_api: bool
 
     def __init__(
         self,
@@ -108,10 +135,12 @@ class UserSimulator:
         doc_search: DocumentCollection | None = None,
         stop_token: str = "<eos>",
         is_main_user: bool = False,
+        use_chat_completion_api: bool = True,
     ):
         self.user = user
         self.description = description
         assert provided_instruction is None or provided_instruction_name is None
+        # TODO: update instruction if use_chat_completion_api is True
         if provided_instruction is not None:
             instruction = provided_instruction
             simulated_user_logger.info(
@@ -140,7 +169,8 @@ class UserSimulator:
             simulated_user_logger.info(
                 f"UserSimulator: using default instruction file {instruction_file_path}"
             )
-        self.prompt_builder = UserSimulatorPromptBuilder(instruction, self.description)
+        self.use_chat_completion_api = use_chat_completion_api
+        self.prompt_builder = UserSimulatorPromptBuilder(instruction, self.description, use_chat_completion_api=use_chat_completion_api)
         self.messages = []
         self.llm_client = llm_client
         self.hitl = hitl
@@ -232,6 +262,7 @@ class UserSimulator:
                     message_type="chat",
                 )
         else:
+            assert self.llm_client is not None
             prompt = self.prompt_builder(
                 self.messages,
                 self.user.full_name,
@@ -240,14 +271,17 @@ class UserSimulator:
             # if not the main user, then don't show the documents
 
             simulated_user_logger.info(f"--->>> User {self.user}")
-            simulated_user_logger.info(f"--->>>> prompt: {prompt}")
+            prompt_str = prompt if isinstance(prompt, str) else json.dumps(prompt, indent=2)
+            simulated_user_logger.info(f"--->>>> prompt: {prompt_str}...")
             simulated_user_logger.info(
                 f"--->>>> stop=self.stop_token: {self.stop_token}"
             )
-            assert self.llm_client is not None
-            response = self.llm_client.get_response_str(
-                prompt, stop=self.stop_token, max_tokens=4000
-            )
+            if isinstance(prompt, str):
+                response = self.llm_client.get_response_str(prompt, stop=self.stop_token, max_tokens=4000)
+            elif isinstance(prompt, list):
+                response = self.llm_client.get_chat_response(messages=prompt, max_tokens=4000)
+            else:
+                raise ValueError("Prompt must be either a string or a list of messages")
             simulated_user_logger.info(f"--->>>> response: {response}")
             simulated_user_logger.info("\n=========================\n")
             if response is not None:

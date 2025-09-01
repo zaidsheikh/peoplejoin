@@ -22,8 +22,8 @@ false = False
 
 LLM_MODEL_CONFIGS = {
   "gpt-4o-2024-05-13": {
-    "name": "neulab/gpt-4o-2024-05-13",
-    # "name": "neulab/gpt-4.1-nano-2025-04-14",
+    # "name": "neulab/gpt-4o-2024-05-13",
+    "name": "neulab/gpt-4.1-nano-2025-04-14",
     # "name": "dev-gpt-4o-2024-05-13",
     # "context_window": 12000,
     # "token_encoding": "o200k_base"
