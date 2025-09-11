@@ -1,0 +1,35 @@
+{
+    "tenant_id": "tenant_data_v2/movie_1",
+    "participant_id_to_descriptions": {
+        "alice": "Alice Anastasiou is an employee at Company. She is interested in knowing What are the names of all reviewers that have given 3 or 4 stars for reviews? which may be available in her documents or notes or Agent might have to reach out to other people. When Agent initates interaction, start with 'What are the names of all reviewers that have given 3 or 4 stars for reviews?'.",
+        "lina": "Lina is an employee at Company. Lina will provide Bot with specific relevant information if it is available in her documents or notes, otherwise politely decline",
+        "bhushan": "Bhushan Magar is an employee at Company. Bhushan will provide Bot with specific relevant information if it is available in his documents or notes, otherwise politely decline",
+        "cassie": "Cassie Hicks is an employee at Company. Cassie will provide Bot with specific relevant information if it is available in her documents or notes, otherwise politely decline",
+        "hannah": "Hannah Jarvis is an employee at Company. Hannah will provide Bot with specific relevant information if it is available in her documents or notes, otherwise politely decline",
+        "dewei": "Dewei Peng is an employee at Company. Dewei will provide Bot with specific relevant information if it is available in his documents or notes, otherwise politely decline",
+        "eden": "Eden is an employee at Company. Eden will provide Bot with specific relevant information if it is available in her documents or notes, otherwise politely decline",
+        "parker": "Parker McLean is an employee at Company. Parker will provide Bot with specific relevant information if it is available in his documents or notes, otherwise politely decline",
+        "farshid": "Farshid Kamangar is an employee at Company. Farshid will provide Bot with specific relevant information if it is available in his documents or notes, otherwise politely decline",
+        "gorosti": "Gorosti Egiagarai is an employee at Company. Gorosti will provide Bot with specific relevant information if it is available in their documents or notes, otherwise politely decline",
+        "harpreet": "Harpreet Thapar is an employee at Company. Harpreet will provide Bot with specific relevant information if it is available in her documents or notes, otherwise politely decline",
+        "irena": "Irena Jovanovic is an employee at Company. Irena will provide Bot with specific relevant information if it is available in her documents or notes, otherwise politely decline",
+        "juan": "Juan Quispe is an employee at Company. Juan will provide Bot with specific relevant information if it is available in his documents or notes, otherwise politely decline",
+        "kerstin": "Kerstin Mark is an employee at Company. Kerstin will provide Bot with specific relevant information if it is available in her documents or notes",
+        "maname": "Maname Mohlare is an employee at Company. Maname will provide Bot with specific relevant information if it is available in her documents or notes",
+        "niks": "Niks Dzenis is an employee at Company. Niks will provide Bot with specific relevant information if it is available in her documents or notes",
+        "oubunmi": "Oubunmi Gboyega is an employee at Company. Oubunmi will provide Bot with specific relevant information if it is available in her documents or notes",
+        "ruwaidah": "Ruwaidah Fakhoury is an employee at Company. Ruwaidah will provide Bot with specific relevant information if it is available in her documents or notes",
+        "sylvie": "Sylvie Rocher is an employee at Company. Sylvie will provide Bot with specific relevant information if it is available in her documents or notes",
+        "tulga": "Tulga Bat-Erdene is an employee at Company. Tulga will provide Bot with specific relevant information if it is available in her documents or notes",
+        "valarie": "Valarie Cabral is an employee at Company. Valarie will provide Bot with specific relevant information if it is available in her documents or notes"
+    },
+    "datum_id": "movie_1_84",
+    "metadata": {
+        "tenant_id": "Alice Anastasiou is an employee at Company. She is interested in knowing What are the names of all reviewers that have given 3 or 4 stars for reviews? which may be available in her documents or notes or Agent might have to reach out to other people.",
+        "description": "Alice Anastasiou is an employee at Company. She is interested in knowing What are the names of all reviewers that have given 3 or 4 stars for reviews? which may be available in her documents or notes or Agent might have to reach out to other people.",
+        "description_reference_response": "[[\"Chris Jackson\"]]",
+        "description_reference_people": "[\"maname\", \"lina\", \"parker\"]"
+    },
+    "agent_config_path": "workspace/peoplejoin-qa/experiments/agent_configs/agentconf_movie_1_gpt4o.json",
+    "default_instructions_file_name": "default_spider"
+}
