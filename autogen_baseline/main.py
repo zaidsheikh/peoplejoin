@@ -1,9 +1,18 @@
+import os
+import sys
+sys.path.append(os.path.dirname(__file__))
+
 import argparse
 import asyncio
 import json
 import logging
-import os
+import re
 from pathlib import Path
+
+# Hack: temporarily override the autogen_ext.models._utils.parse_r1_content function
+import autogen_ext.models._utils.parse_r1_content
+from utils.utils import my_parse_r1_content, LLMUsageTracker, OrderedMessageFilterAgent
+autogen_ext.models._utils.parse_r1_content.parse_r1_content = my_parse_r1_content
 
 from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.base import Handoff
@@ -12,9 +21,9 @@ from autogen_agentchat.messages import BaseChatMessage
 from autogen_agentchat.teams import DiGraphBuilder, GraphFlow, Swarm
 from autogen_agentchat.ui import Console
 from autogen_core import EVENT_LOGGER_NAME
-from autogen_core.logging import LLMCallEvent
 from autogen_core.models import ModelFamily
 from autogen_ext.models.openai import OpenAIChatCompletionClient
+
 
 # import phoenix.otel
 # tracer_provider = phoenix.otel.register(
@@ -24,61 +33,13 @@ from autogen_ext.models.openai import OpenAIChatCompletionClient
 # )
 
 
-class LLMUsageTracker(logging.Handler):
-    def __init__(self, log_file_path: str | Path | None = None) -> None:
-        """Logging handler that tracks the number of tokens used in the prompt and completion."""
-        super().__init__()
-        self._prompt_tokens = 0
-        self._completion_tokens = 0
-        self._log_file_path = Path(log_file_path) if log_file_path else None
-        self._log_file = None
-
-        # Open the log file if path is provided
-        if self._log_file_path:
-            self._log_file = open(self._log_file_path, "a", encoding="utf-8")
-
-    @property
-    def tokens(self) -> int:
-        return self._prompt_tokens + self._completion_tokens
-
-    @property
-    def prompt_tokens(self) -> int:
-        return self._prompt_tokens
-
-    @property
-    def completion_tokens(self) -> int:
-        return self._completion_tokens
-
-    def reset(self) -> None:
-        self._prompt_tokens = 0
-        self._completion_tokens = 0
-
-    def close(self) -> None:
-        """Close the log file if it's open."""
-        if self._log_file:
-            self._log_file.close()
-            self._log_file = None
-        super().close()
-
-    def emit(self, record: logging.LogRecord) -> None:
-        """Emit the log record. To be used by the logging module."""
-        try:
-            # Use the StructuredMessage if the message is an instance of it
-            if isinstance(record.msg, LLMCallEvent):
-                event = record.msg
-                self._prompt_tokens += event.prompt_tokens
-                self._completion_tokens += event.completion_tokens
-
-                # Log to file if file handle is open
-                if self._log_file:
-                    self._log_file.write(str(event) + "\n")
-                    self._log_file.flush()  # Ensure immediate write
-        except Exception:
-            self.handleError(record)
 
 
 def initialize_agents(
-    agents: dict, model_client: OpenAIChatCompletionClient, enable_handoffs: bool
+    agents: dict,
+    primary_agent_model_client: OpenAIChatCompletionClient,
+    other_agents_model_client: OpenAIChatCompletionClient,
+    enable_handoffs: bool
 ) -> None:
     all_agent_names = list(agents.keys())
     primary_agent_name = next(
@@ -97,10 +58,12 @@ def initialize_agents(
     primary_agent_instruction = (
         "Otherwise if you do not have enough information to fully answer the question,\n"
         "reach out to other agents for any additional information based on their descriptions.\n"
-        "To do so, start your message with '@AgentName' to get their attention.\n"
+        "To do so, start your message with 'Hello @AgentName' to get their attention.\n"
         "Make sure to include all relevant context in your message to them.\n"
         f"{'Always send your message first, then handoff to appropriate agent. Always handoff to a single agent at a time. ' if enable_handoffs else ''}"
-        "You can have multiple back-and-forth exchanges with other agents.\n"
+        "You can respond back to the agent (do not forget to start your message with 'Hello @AgentName') if the answer is not complete or you need clarifications.\n"
+        "Do not address multiple agents in the same message.\n"
+        "If you need to get information from multiple agents, reach out to them one at a time.\n"
         "After you have gathered enough information, provide a final answer.\n"
         "Your final answer should start with 'Final Answer: <your answer>'.\n"
         "Here are the other agents' descriptions:\n"
@@ -144,7 +107,7 @@ def initialize_agents(
             name=agent_name,
             description=agent_info.get("description"),
             system_message=system_message,
-            model_client=model_client,
+            model_client=primary_agent_model_client if agent_info.get("is_primary_user") else other_agents_model_client,
             handoffs=handoffs if enable_handoffs else None,
         )
 
@@ -152,7 +115,11 @@ def initialize_agents(
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--llm_model",
+        "--primary_llm_model",
+        type=str,
+    )
+    parser.add_argument(
+        "--default_llm_model",
         type=str,
         default=os.environ.get("LLM_MODEL", "neulab/gpt-4.1-nano-2025-04-14"),
     )
@@ -186,19 +153,40 @@ def parse_args():
 
 async def main() -> None:
     args = parse_args()
-    print(f"Using LLM model: {args.llm_model}, LLM base URL: {args.llm_base_url}")
+    if not args.primary_llm_model:
+        args.parimary_llm_model = args.default_llm_model
+
+    print(f"Using LLM model: {args.primary_llm_model}, {args.default_llm_model}")
+    print(f"LLM base URL: {args.llm_base_url}")
 
     logger = logging.getLogger(EVENT_LOGGER_NAME)
     logger.setLevel(logging.INFO)
     llm_usage = LLMUsageTracker(log_file_path=args.log_llm_calls)
     logger.handlers = [llm_usage]
 
-    model_client = OpenAIChatCompletionClient(
-        model=args.llm_model,
+
+    primary_agent_model_client = OpenAIChatCompletionClient(
+        model=args.primary_llm_model,
         api_key=args.llm_api_key,
         base_url=args.llm_base_url,
         model_info={
-            "family": ModelFamily.GPT_41,
+            # "family": ModelFamily.GPT_41,
+            "family": ModelFamily.R1, # TODO hack: using R1 for qwen3 to take advantage of parse_r1_content()
+            "vision": False,
+            "function_calling": True,
+            "json_output": False,
+            "structured_output": False,
+            "multiple_system_messages": True,
+        },
+    )
+
+    other_agents_model_client = OpenAIChatCompletionClient(
+        model=args.default_llm_model,
+        api_key=args.llm_api_key,
+        base_url=args.llm_base_url,
+        model_info={
+            # "family": ModelFamily.GPT_41,
+            "family": ModelFamily.UNKNOWN,
             "vision": False,
             "function_calling": True,
             "json_output": False,
@@ -223,7 +211,7 @@ async def main() -> None:
             }
 
     initialize_agents(
-        agents, model_client, enable_handoffs=args.groupchat_type == "swarm"
+        agents, primary_agent_model_client, other_agents_model_client, enable_handoffs=args.groupchat_type == "swarm"
     )
 
     # load question
@@ -238,7 +226,8 @@ async def main() -> None:
         )
 
     termination_condition = MaxMessageTermination(30) | TextMentionTermination(
-        "Final Answer:"
+        text="Final Answer:",
+        sources=[primary_user],
     )
 
     if args.groupchat_type == "swarm":
@@ -266,11 +255,10 @@ async def main() -> None:
 
             def make_trigger_condition(agent_name: str):
                 def trigger_condition(message: BaseChatMessage) -> bool:
-                    return (
-                        message.to_model_text()
-                        .lower()
-                        .startswith(f"@{agent_name.lower()}")
+                    pattern = re.compile(
+                        rf"Hello @{re.escape(agent_name)}($|[^a-zA-Z0-9_-])", re.IGNORECASE
                     )
+                    return bool(pattern.search(message.to_model_text()))
 
                 return trigger_condition
 
@@ -286,7 +274,7 @@ async def main() -> None:
             )
         terminal_agent = AssistantAgent(
             name="terminal",
-            model_client=model_client,
+            model_client=other_agents_model_client,
             system_message="You are a terminal node. Simply acknowledge receipt of the final answer.",
         )
 
