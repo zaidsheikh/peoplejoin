@@ -1,17 +1,20 @@
+# ruff: noqa: E402
 import os
 import sys
+
 sys.path.append(os.path.dirname(__file__))
 
-import argparse
+import argparse  # noqa: I001
 import asyncio
 import json
 import logging
 import re
 from pathlib import Path
+from datetime import datetime
 
 # Hack: temporarily override the autogen_ext.models._utils.parse_r1_content function
 import autogen_ext.models._utils.parse_r1_content
-from utils.utils import my_parse_r1_content, LLMUsageTracker, OrderedMessageFilterAgent
+from utils.utils import my_parse_r1_content, LLMUsageTracker, OrderedMessageFilterAgent, capture_stream_and_write_to_file
 autogen_ext.models._utils.parse_r1_content.parse_r1_content = my_parse_r1_content
 
 from autogen_agentchat.agents import AssistantAgent
@@ -23,7 +26,6 @@ from autogen_agentchat.ui import Console
 from autogen_core import EVENT_LOGGER_NAME
 from autogen_core.models import ModelFamily
 from autogen_ext.models.openai import OpenAIChatCompletionClient
-
 
 # import phoenix.otel
 # tracer_provider = phoenix.otel.register(
@@ -134,13 +136,10 @@ def parse_args():
         default=os.environ.get("LLM_BASE_URL", "https://cmu.litellm.ai"),
     )
     parser.add_argument(
-        "--data_dir", type=Path, default=Path(__file__).parent / "example_data"
-    )
-    parser.add_argument(
-        "--log_llm_calls",
+        "--output_dir",
         type=Path,
-        default=Path("llm_calls.jsonl"),
-        help="Path to log LLM calls as JSON lines (default: llm_calls.jsonl)",
+        default=Path("output"),
+        help="Directory to save outputs (default: outputs)",
     )
     parser.add_argument(
         "--groupchat_type",
@@ -148,22 +147,60 @@ def parse_args():
         default="graph",
         help="Type of group chat to use (default: graph)",
     )
+    parser.add_argument(
+        "--question",
+        type=str,
+        required=True,
+        help="The question to ask the agents",
+    )
+    parser.add_argument(
+        "--datum_id",
+        type=str,
+        required=True,
+        help="The datum_id of the question to ask the agents",
+    )
+    parser.add_argument(
+        "--tenant_id",
+        type=str,
+        required=True,
+        help="The tenant_id of the agent data: data_dir/<tenant_id>.json",
+    )
+    parser.add_argument(
+        "--data_dir",
+        type=Path,
+        default=Path(__file__).parent.parent / "data" / "peoplejoin-qa",
+        help="Path to the tenant data directory (default: peoplejoin/data/peoplejoin-qa)",
+    )
     return parser.parse_args()
 
 
 async def main() -> None:
     args = parse_args()
+    os.makedirs(args.output_dir, exist_ok=True)
+
     if not args.primary_llm_model:
-        args.parimary_llm_model = args.default_llm_model
+        args.primary_llm_model = args.default_llm_model
 
     print(f"Using LLM model: {args.primary_llm_model}, {args.default_llm_model}")
     print(f"LLM base URL: {args.llm_base_url}")
+    print(f"Datum ID: {args.datum_id}")
+    print(f"Tenant ID: {args.tenant_id}")
 
     logger = logging.getLogger(EVENT_LOGGER_NAME)
     logger.setLevel(logging.INFO)
-    llm_usage = LLMUsageTracker(log_file_path=args.log_llm_calls)
+    llm_calls_log_path = args.output_dir / f"{args.datum_id}_llm_calls.jsonl"
+    llm_usage = LLMUsageTracker(log_file_path=llm_calls_log_path)
     logger.handlers = [llm_usage]
 
+    # NOTE: currently previous thoughts are not included in the context sent to the LLM for completions
+    # To change this behaviour, add the following code to the top of this script
+    #
+    # from autogen_ext.models.openai import _message_transform
+    # _message_transform.single_assistant_transformer_funcs.append(
+    #     lambda msg, _: {
+    #         "content": f"<think>{msg.thought or ''}</think> {msg.content or ''}"
+    #     }
+    # )
 
     primary_agent_model_client = OpenAIChatCompletionClient(
         model=args.primary_llm_model,
@@ -196,7 +233,7 @@ async def main() -> None:
     )
     # load users, user descriptions, user documents from example_data/movie_1.json
     agents = {}
-    with open(args.data_dir / "movie_1.json") as f:
+    with open(args.data_dir / f"{args.tenant_id}.json") as f:
         data = json.load(f)
         users = [d["user_id"] for d in data.get("users", [])]
         primary_user = data["primary_user"]["user_id"]
@@ -215,15 +252,15 @@ async def main() -> None:
     )
 
     # load question
-    with open(args.data_dir / "experiment_0.json") as f:
-        data = json.load(f)
-        # TODO: add the original question to the config file
-        question = (
-            data["participant_id_to_descriptions"][primary_user]
-            .split("She is interested in knowing")[-1]
-            .split("which may be available in her documents")[0]
-            .strip()
-        )
+    # with open(args.data_dir / "experiment_0.json") as f:
+    #     data = json.load(f)
+    #     # TODO: add the original question to the config file
+    #     question = (
+    #         data["participant_id_to_descriptions"][primary_user]
+    #         .split("She is interested in knowing")[-1]
+    #         .split("which may be available in her documents")[0]
+    #         .strip()
+    #     )
 
     termination_condition = MaxMessageTermination(30) | TextMentionTermination(
         text="Final Answer:",
@@ -301,14 +338,18 @@ async def main() -> None:
     else:
         raise ValueError(f"Unsupported groupchat_type: {args.groupchat_type}")
 
-    await Console(team.run_stream(task=question))
+    stream = team.run_stream(task=args.question)
+    autogen_messages_log_path = args.output_dir / f"{args.datum_id}_autogen_messages.jsonl"
+    wrapped_stream = await capture_stream_and_write_to_file(stream, autogen_messages_log_path)
+    await Console(wrapped_stream)
 
     # Print token usage summary
     print("\nToken usage summary:")
     print(f"Prompt tokens: {llm_usage.prompt_tokens}")
     print(f"Completion tokens: {llm_usage.completion_tokens}")
     print(f"Total tokens: {llm_usage.tokens}")
-    print(f"LLM calls logged to: {args.log_llm_calls}")
+    print(f"LLM calls logged to: {llm_calls_log_path}")
+    print(f"Autogen messages logged to: {autogen_messages_log_path}")
 
 
 if __name__ == "__main__":

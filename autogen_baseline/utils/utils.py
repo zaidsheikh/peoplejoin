@@ -1,3 +1,4 @@
+import json
 import logging
 import warnings
 from collections.abc import Sequence
@@ -49,6 +50,29 @@ def my_parse_r1_content(content: str) -> tuple[str | None, str]:
     return thought, content
 
 
+async def capture_stream_and_write_to_file(stream, jsonl_file_path):
+    """
+    Captures all events/messages from the stream and writes them to a JSONL file in real-time.
+
+    Args:
+        stream: The async generator stream to be captured.
+        jsonl_file_path: The path to the JSONL file to write the events/messages.
+
+    Returns:
+        A new async generator with the same events/messages.
+    """
+    async def wrapped_stream():
+        with open(jsonl_file_path, "w") as jsonl_file:
+            async for message in stream:
+                if hasattr(message, "model_dump") and callable(message.model_dump):
+                    jsonl_file.write(json.dumps(message.model_dump(), default=str) + "\n")
+                jsonl_file.flush()  # Ensure the message is written immediately
+                yield message  # Pass the message along to Console()
+
+    return wrapped_stream()
+
+
+
 class LLMUsageTracker(logging.Handler):
     def __init__(self, log_file_path: str | Path | None = None) -> None:
         """Logging handler that tracks the number of tokens used in the prompt and completion."""
@@ -60,6 +84,8 @@ class LLMUsageTracker(logging.Handler):
 
         # Open the log file if path is provided
         if self._log_file_path:
+            if self._log_file_path.exists():
+                self._log_file_path.unlink()
             self._log_file = open(self._log_file_path, "a", encoding="utf-8")
 
     @property
