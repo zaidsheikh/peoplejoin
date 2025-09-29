@@ -10,11 +10,10 @@ import json
 import logging
 import re
 from pathlib import Path
-from datetime import datetime
 
 # Hack: temporarily override the autogen_ext.models._utils.parse_r1_content function
 import autogen_ext.models._utils.parse_r1_content
-from utils.utils import my_parse_r1_content, LLMUsageTracker, OrderedMessageFilterAgent, capture_stream_and_write_to_file
+from utils.utils import my_parse_r1_content, LLMUsageTracker, capture_stream_and_write_to_file
 autogen_ext.models._utils.parse_r1_content.parse_r1_content = my_parse_r1_content
 
 from autogen_agentchat.agents import AssistantAgent
@@ -35,6 +34,7 @@ from autogen_ext.models.openai import OpenAIChatCompletionClient
 # )
 
 
+orchestrator_name = "orchestrator"
 
 
 def initialize_agents(
@@ -43,65 +43,51 @@ def initialize_agents(
     other_agents_model_client: OpenAIChatCompletionClient,
     enable_handoffs: bool
 ) -> None:
+    # Create the orchestrator agent first
     all_agent_names = list(agents.keys())
-    primary_agent_name = next(
-        name for name, info in agents.items() if info.get("is_primary_user")
-    )
-    other_agent_names = [name for name in all_agent_names if name != primary_agent_name]
 
-    other_agent_descriptions = "\n".join(
-        [f"{name}: {agents[name]['description']}" for name in other_agent_names]
+    # All existing agents are now treated equally - no primary user distinction
+    agent_descriptions = "\n".join(
+        [f"{name}: {agents[name]['description']}" for name in all_agent_names]
     )
 
-    other_agent_instruction = (
-        "If you do not have enough information to answer the question, let the requester know what information you need to answer the question or what information you have that might be relevant.\n"
-        f"{'Always send your message first, then handoff back to the requester.' if enable_handoffs else ''}\n"
-    )
-    primary_agent_instruction = (
-        "Otherwise if you do not have enough information to fully answer the question,\n"
-        "reach out to other agents for any additional information based on their descriptions.\n"
-        "To do so, start your message with 'Hello @AgentName' to get their attention.\n"
+    # Instructions for the orchestrator agent
+    orchestrator_instruction = (
+        "You are the orchestrator agent responsible for coordinating with other agents to answer questions.\n"
+        "When you receive a question, analyze what information might be needed and reach out to the appropriate agents.\n"
+        "To contact an agent, start your message with 'Hello @AgentName' to get their attention.\n"
         "Make sure to include all relevant context in your message to them.\n"
-        f"{'Always send your message first, then handoff to appropriate agent. Always handoff to a single agent at a time. ' if enable_handoffs else ''}"
-        "You can respond back to the agent (do not forget to start your message with 'Hello @AgentName') if the answer is not complete or you need clarifications.\n"
+        f"{'Always send your message first, then handoff to the appropriate agent. Always handoff to a single agent at a time. ' if enable_handoffs else ''}"
+        "You can follow up with agents (do not forget to start your message with 'Hello @AgentName') if you need clarifications or additional information.\n"
         "Do not address multiple agents in the same message.\n"
-        "If you need to get information from multiple agents, reach out to them one at a time.\n"
-        "After you have gathered enough information, provide a final answer.\n"
+        "If you need information from multiple agents, reach out to them one at a time.\n"
+        "After you have gathered enough information from the agents, provide a final answer.\n"
         "Your final answer should start with 'Final Answer: <your answer>'.\n"
-        "Here are the other agents' descriptions:\n"
-        f"{other_agent_descriptions}\n"
+        "Here are the available agents and their descriptions:\n"
+        f"{agent_descriptions}\n"
+    )
+
+    # Instructions for regular agents
+    agent_instruction = (
+        "You are an AI agent with access to specific documents and information.\n"
+        "When contacted by the orchestrator or other agents, provide specific relevant information from your documents if available.\n"
+        "If you do not have enough information to fully answer a question, let the requester know what information you need or what relevant information you do have.\n"
+        f"{'Always send your message first, then handoff back to the orchestrator.' if enable_handoffs else ''}\n"
     )
 
     for agent_name, agent_info in agents.items():
-        system_message = (
-            f"You are {agent_name}, an AI agent tasked with answering questions.\n"
-            + "Provide specific relevant information if it is available in your documents.\n"
-            + (
-                primary_agent_instruction
-                if agent_info.get("is_primary_user")
-                else other_agent_instruction
-            )
-        )
+        system_message = agent_instruction
         if agent_info.get("documents"):
             docs_summary = "\n".join([f"- {doc}" for doc in agent_info["documents"]])
             system_message += f"\n\nYour documents:\n{docs_summary}"
 
         handoffs: list[Handoff | str] = []
-        if agent_info.get("is_primary_user"):
+        if enable_handoffs:
             handoffs = [
                 Handoff(
-                    target=other_agent,
-                    name=f"handoff_to_{other_agent}",
-                    description=f"Handoff to {other_agent}. {agents[other_agent]['description']}",
-                )
-                for other_agent in other_agent_names
-            ]
-        else:
-            handoffs = [
-                Handoff(
-                    target=primary_agent_name,
-                    name="handoff_to_requestor",
-                    description="Handoff back to the requestor",
+                    target=orchestrator_name,
+                    name="handoff_to_orchestrator",
+                    description="Handoff back to the orchestrator",
                 )
             ]
 
@@ -109,9 +95,35 @@ def initialize_agents(
             name=agent_name,
             description=agent_info.get("description"),
             system_message=system_message,
-            model_client=primary_agent_model_client if agent_info.get("is_primary_user") else other_agents_model_client,
+            model_client=other_agents_model_client,
             handoffs=handoffs if enable_handoffs else None,
         )
+
+    # Create the orchestrator agent
+    orchestrator_handoffs: list[Handoff | str] = []
+    if enable_handoffs:
+        orchestrator_handoffs = [
+            Handoff(
+                target=agent_name,
+                name=f"handoff_to_{agent_name}",
+                description=f"Handoff to {agent_name}. {agents[agent_name]['description']}",
+            )
+            for agent_name in all_agent_names
+        ]
+
+    agents[orchestrator_name] = {
+        "name": orchestrator_name,
+        "description": "Coordinates with other agents to gather information and provide comprehensive answers",
+        "documents": [],
+        "is_orchestrator": True,
+        "agent": AssistantAgent(
+            name=orchestrator_name,
+            description="Coordinates with other agents to gather information and provide comprehensive answers",
+            system_message=orchestrator_instruction,
+            model_client=primary_agent_model_client,
+            handoffs=orchestrator_handoffs if enable_handoffs else None,
+        )
+    }
 
 
 def parse_args():
@@ -236,7 +248,7 @@ async def main() -> None:
     with open(args.data_dir / f"{args.tenant_id}.json") as f:
         data = json.load(f)
         users = [d["user_id"] for d in data.get("users", [])]
-        primary_user = data["primary_user"]["user_id"]
+        # Note: ignoring primary_user designation - all users are treated equally now
         user_descriptions = data.get("user_id_to_descriptions_templated", {})
         user_documents = data.get("user_id_to_documents", {})
         for user in users:
@@ -244,12 +256,12 @@ async def main() -> None:
                 "name": user,
                 "description": user_descriptions.get(user, ""),
                 "documents": user_documents.get(user, []),
-                "is_primary_user": user == primary_user,
             }
 
     initialize_agents(
         agents, primary_agent_model_client, other_agents_model_client, enable_handoffs=args.groupchat_type == "swarm"
     )
+
 
     # load question
     # with open(args.data_dir / "experiment_0.json") as f:
@@ -264,30 +276,30 @@ async def main() -> None:
 
     termination_condition = MaxMessageTermination(30) | TextMentionTermination(
         text="Final Answer:",
-        sources=[primary_user],
+        sources=[orchestrator_name],
     )
 
     if args.groupchat_type == "swarm":
-        # setup a swarm group chat with the primary agent as the initial agent
-        # Extract the agent objects and ensure primary agent is first
+        # setup a swarm group chat with the orchestrator as the initial agent
+        # Extract the agent objects and ensure orchestrator is first
         agent_list = []
-        agent_list.append(agents[primary_user]["agent"])
+        agent_list.append(agents[orchestrator_name]["agent"])
 
-        # Add other agents
-        for agent_info in agents.values():
-            if not agent_info.get("is_primary_user"):
+        # Add all other user agents
+        for agent_name, agent_info in agents.items():
+            if agent_name != orchestrator_name:
                 agent_list.append(agent_info["agent"])
         team = Swarm(
             participants=agent_list, termination_condition=termination_condition
         )
 
     elif args.groupchat_type == "graph":
-        # setup a graph-based group chat with the primary agent as the initial agent
+        # setup a graph-based group chat with the orchestrator as the initial agent
         graph_builder = DiGraphBuilder()
         for agent_info in agents.values():
             graph_builder.add_node(agent_info["agent"])
         for agent_name, agent_info in agents.items():
-            if agent_name == primary_user:
+            if agent_name == orchestrator_name:
                 continue
 
             def make_trigger_condition(agent_name: str):
@@ -300,13 +312,13 @@ async def main() -> None:
                 return trigger_condition
 
             graph_builder.add_edge(
-                source=agents[primary_user]["agent"],
+                source=agents[orchestrator_name]["agent"],
                 target=agent_info["agent"],
                 condition=make_trigger_condition(agent_name),
             )
             graph_builder.add_edge(
                 source=agent_info["agent"],
-                target=agents[primary_user]["agent"],
+                target=agents[orchestrator_name]["agent"],
                 activation_group=agent_name,
             )
         terminal_agent = AssistantAgent(
@@ -320,11 +332,11 @@ async def main() -> None:
 
         graph_builder.add_node(terminal_agent)
         graph_builder.add_edge(
-            source=agents[primary_user]["agent"],
+            source=agents[orchestrator_name]["agent"],
             target=terminal_agent,
             condition=final_trigger_condition,
         )
-        graph_builder.set_entry_point(agents[primary_user]["agent"])
+        graph_builder.set_entry_point(agents[orchestrator_name]["agent"])
         graph = graph_builder.build()
         all_participants = [agents[agent]["agent"] for agent in agents] + [
             terminal_agent
