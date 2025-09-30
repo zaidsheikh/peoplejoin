@@ -1,11 +1,13 @@
 import json
 import logging
 import warnings
-from collections.abc import Sequence
+from collections.abc import AsyncGenerator, Sequence
 from pathlib import Path
 
 from autogen_agentchat.agents import MessageFilterAgent
-from autogen_agentchat.messages import BaseChatMessage
+from autogen_agentchat.base import Response
+from autogen_agentchat.messages import BaseAgentEvent, BaseChatMessage
+from autogen_core import CancellationToken
 from autogen_core.logging import LLMCallEvent
 
 
@@ -135,27 +137,97 @@ class OrderedMessageFilterAgent(MessageFilterAgent):
     Unlike the base MessageFilterAgent which groups messages by source,
     this implementation preserves the chronological order of messages
     while still applying the per-source filters.
+
+    Filtering is configured using :class:`MessageFilterConfig`, which supports:
+    - Filtering by message source (e.g., only messages from "user" or another agent)
+    - Selecting the first N or last N messages from each source
+    - If position is `None`, all messages from that source are included
+
+    This agent is compatible with both direct message passing and team-based execution
+    such as :class:`~autogen_agentchat.teams.GraphFlow`.
+
+    Example:
+        >>> agent_a = MessageFilterAgent(
+        ...     name="A",
+        ...     wrapped_agent=some_other_agent,
+        ...     filter=MessageFilterConfig(
+        ...         per_source=[
+        ...             PerSourceFilter(source="user", position="first", count=1),
+        ...             PerSourceFilter(source="B", position="last", count=2),
+        ...         ]
+        ...     ),
+        ... )
     """
 
     def _apply_filter(self, messages: Sequence[BaseChatMessage]) -> Sequence[BaseChatMessage]:
-        # Create a mapping of what messages to keep for each source
-        messages_to_keep = set()
+        # Create a mapping of what message indices to keep
+        indices_to_keep = set()
 
         for source_filter in self._filter.per_source:
-            # Get messages from this source
-            source_messages = [m for m in messages if m.source == source_filter.source]
+            # Get indices of messages from this source
+            source_indices = [i for i, m in enumerate(messages) if m.source == source_filter.source]
 
-            # Apply position and count filters
+            # Apply position and count filters to get the indices we want
             if source_filter.position == "first" and source_filter.count:
-                selected = source_messages[:source_filter.count]
+                selected_indices = source_indices[:source_filter.count]
             elif source_filter.position == "last" and source_filter.count:
-                selected = source_messages[-source_filter.count:]
+                selected_indices = source_indices[-source_filter.count:]
             else:
                 # If position is None or count is None, include all messages from this source
-                selected = source_messages
+                selected_indices = source_indices
 
-            # Add selected messages to our set
-            messages_to_keep.update(selected)
+            # Add selected indices to our set
+            indices_to_keep.update(selected_indices)
 
-        # Return messages in their original order, but only those that should be kept
-        return [msg for msg in messages if msg in messages_to_keep]
+        # Return messages in their original order, but only those whose indices should be kept
+        return [messages[i] for i in sorted(indices_to_keep)]
+
+    def _update_message_source(self, message: BaseChatMessage) -> BaseChatMessage:
+        """Update the source of a message if it matches the wrapped agent's name."""
+        if message.source == self._wrapped_agent.name:
+            message.source = self.name
+        return message
+
+    def _update_response_sources(self, response: Response) -> Response:
+        """Update sources in a Response object."""
+        if response.chat_message:
+            response.chat_message = self._update_message_source(response.chat_message)
+
+        # updated_inner_messages = None
+        # if response.inner_messages:
+        #     updated_inner_messages = []
+        #     for msg in response.inner_messages:
+        #         if isinstance(msg, BaseChatMessage):
+        #             updated_inner_messages.append(self._update_message_source(msg))
+        #         else:
+        #             # BaseAgentEvent or other types pass through unchanged
+        #             updated_inner_messages.append(msg)
+        #     response.inner_messages = updated_inner_messages
+
+        return response
+
+    async def on_messages(
+        self,
+        messages: Sequence[BaseChatMessage],
+        cancellation_token: CancellationToken,
+    ) -> Response:
+        """Override to update message sources in the response."""
+        filtered = self._apply_filter(messages)
+        response = await self._wrapped_agent.on_messages(filtered, cancellation_token)
+        return self._update_response_sources(response)
+
+    async def on_messages_stream(
+        self,
+        messages: Sequence[BaseChatMessage],
+        cancellation_token: CancellationToken,
+    ) -> AsyncGenerator[BaseAgentEvent | BaseChatMessage | Response, None]:
+        """Override to update message sources in streamed responses."""
+        filtered = self._apply_filter(messages)
+        async for item in self._wrapped_agent.on_messages_stream(filtered, cancellation_token):
+            if isinstance(item, BaseChatMessage):
+                yield self._update_message_source(item)
+            elif isinstance(item, Response):
+                yield self._update_response_sources(item)
+            else:
+                # BaseAgentEvent and other types pass through unchanged
+                yield item

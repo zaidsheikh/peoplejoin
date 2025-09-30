@@ -13,10 +13,14 @@ from pathlib import Path
 
 # Hack: temporarily override the autogen_ext.models._utils.parse_r1_content function
 import autogen_ext.models._utils.parse_r1_content
-from utils.utils import my_parse_r1_content, LLMUsageTracker, capture_stream_and_write_to_file
+from utils.utils import my_parse_r1_content, LLMUsageTracker, capture_stream_and_write_to_file, OrderedMessageFilterAgent
 autogen_ext.models._utils.parse_r1_content.parse_r1_content = my_parse_r1_content
 
 from autogen_agentchat.agents import AssistantAgent
+from autogen_agentchat.agents._message_filter_agent import (
+    MessageFilterConfig,
+    PerSourceFilter,
+)
 from autogen_agentchat.base import Handoff
 from autogen_agentchat.conditions import MaxMessageTermination, TextMentionTermination
 from autogen_agentchat.messages import BaseChatMessage
@@ -69,14 +73,14 @@ def initialize_agents(
 
     # Instructions for regular agents
     agent_instruction = (
-        "You are an AI agent with access to specific documents and information.\n"
+        "an AI agent with access to specific documents and information.\n"
         "When contacted by the orchestrator or other agents, provide specific relevant information from your documents if available.\n"
         "If you do not have enough information to fully answer a question, let the requester know what information you need or what relevant information you do have.\n"
         f"{'Always send your message first, then handoff back to the orchestrator.' if enable_handoffs else ''}\n"
     )
 
     for agent_name, agent_info in agents.items():
-        system_message = agent_instruction
+        system_message = f"You are {agent_name}, {agent_instruction}"
         if agent_info.get("documents"):
             docs_summary = "\n".join([f"- {doc}" for doc in agent_info["documents"]])
             system_message += f"\n\nYour documents:\n{docs_summary}"
@@ -91,12 +95,30 @@ def initialize_agents(
                 )
             ]
 
-        agents[agent_name]["agent"] = AssistantAgent(
-            name=agent_name,
+        # Create the base assistant agent
+        base_agent = AssistantAgent(
+            name=f"inner_{agent_name}",
             description=agent_info.get("description"),
             system_message=system_message,
             model_client=other_agents_model_client,
             handoffs=handoffs if enable_handoffs else None,
+        )
+
+        # Wrap the agent in OrderedMessageFilterAgent to filter messages
+        # Only allow messages from "user", orchestrator, and the agent itself
+        message_filter = MessageFilterConfig(
+            per_source=[
+                PerSourceFilter(source="user"),  # All messages from user
+                PerSourceFilter(source=orchestrator_name, position="last", count=1),  # all previous messages from orchestrator to this agent will still be included since the wrapped AssistantAgent keeps them in its internal context
+                PerSourceFilter(source=f"inner_{agent_name}"),  # All messages from itself
+                PerSourceFilter(source=agent_name),  # All messages from itself
+            ]
+        )
+
+        agents[agent_name]["agent"] = OrderedMessageFilterAgent(
+            name=agent_name,
+            wrapped_agent=base_agent,
+            filter=message_filter,
         )
 
     # Create the orchestrator agent
@@ -254,8 +276,14 @@ async def main() -> None:
         for user in users:
             agents[user] = {
                 "name": user,
-                "description": user_descriptions.get(user, ""),
                 "documents": user_documents.get(user, []),
+                "description": re.sub(
+                    pattern=r"\bUser\b",
+                    repl="Agent",
+                    string=user_descriptions.get(user, ""),
+                    count=1,
+                    flags=re.IGNORECASE,
+                ),
             }
 
     initialize_agents(
