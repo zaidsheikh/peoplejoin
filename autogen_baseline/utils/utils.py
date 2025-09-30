@@ -76,13 +76,14 @@ async def capture_stream_and_write_to_file(stream, jsonl_file_path):
 
 
 class LLMUsageTracker(logging.Handler):
-    def __init__(self, log_file_path: str | Path | None = None) -> None:
+    def __init__(self, datum_id: str,log_file_path: str | Path | None = None) -> None:
         """Logging handler that tracks the number of tokens used in the prompt and completion."""
         super().__init__()
         self._prompt_tokens = 0
         self._completion_tokens = 0
         self._log_file_path = Path(log_file_path) if log_file_path else None
         self._log_file = None
+        self._datum_id = datum_id
 
         # Open the log file if path is provided
         if self._log_file_path:
@@ -119,6 +120,7 @@ class LLMUsageTracker(logging.Handler):
             # Use the StructuredMessage if the message is an instance of it
             if isinstance(record.msg, LLMCallEvent):
                 event = record.msg
+                event.kwargs["datum_id"] = self._datum_id  # Add datum_id to the event
                 self._prompt_tokens += event.prompt_tokens
                 self._completion_tokens += event.completion_tokens
 

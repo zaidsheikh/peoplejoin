@@ -223,7 +223,7 @@ async def main() -> None:
     logger = logging.getLogger(EVENT_LOGGER_NAME)
     logger.setLevel(logging.INFO)
     llm_calls_log_path = args.output_dir / f"{args.datum_id}_llm_calls.jsonl"
-    llm_usage = LLMUsageTracker(log_file_path=llm_calls_log_path)
+    llm_usage = LLMUsageTracker(args.datum_id, log_file_path=llm_calls_log_path)
     logger.handlers = [llm_usage]
 
     # NOTE: currently previous thoughts are not included in the context sent to the LLM for completions
