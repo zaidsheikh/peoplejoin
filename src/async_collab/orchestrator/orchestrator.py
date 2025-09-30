@@ -34,8 +34,8 @@ class Orchestrator(ABC):
         self.init_prompt_builder(exemplar_ids)
         self.llm_client = llm_client
 
-    def init_prompt_builder(self, exemplar_ids: list[str]):
-        self.prompt_builder: PromptBuilder = PromptBuilder(self.plugins, exemplar_ids)
+    def init_prompt_builder(self, exemplar_ids: list[str], prompt_builder_cls: type[PromptBuilder] = PromptBuilder):
+        self.prompt_builder: PromptBuilder = prompt_builder_cls(self.plugins, exemplar_ids)
 
     def reset(self):
         self.prompt_builder.reset()

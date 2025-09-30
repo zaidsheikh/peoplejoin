@@ -7,6 +7,12 @@ import openai
 
 from async_collab.llm.llm_client import LLMClient
 
+def format_tool_call_as_str(tool_call: dict) -> str:
+    function_name = tool_call["function"]["name"].replace('__', '.', 1)
+    function_args = json.loads(tool_call["function"]["arguments"])
+    args_str = ", ".join(f'{k}={json.dumps(v)}' for k, v in function_args.items())
+    return f"{function_name}({args_str})"
+
 
 class LLMModelName(Enum):
     gpt4_nano = "gpt-4.1-nano-2025-04-14"
@@ -48,16 +54,26 @@ class MyLLMClient(LLMClient):
 
 
     def send_chat_request(self, request, model) -> dict:
-        messages = []
-        if len(request["system_instruction"]) > 0:
-            messages.append({"role": "system", "content": request["system_instruction"]})
-        messages.append({"role": "user", "content": request["prompt"]})
+        if request.get("messages"):
+            messages = request["messages"]
+        elif request.get("prompt"):
+            messages = []
+            if request.get("system_instruction"):
+                messages.append({"role": "system", "content": request["system_instruction"]})
+            messages.append({"role": "user", "content": request["prompt"]})
+        else:
+            raise ValueError("Either 'messages' or 'prompt' must be provided.")
 
-        response = self.client.chat.completions.create(
-            model=model,
-            messages=messages,
-        )
-        return response.model_dump()
+        chat_params = {
+            "model": model,
+            "messages": messages,
+        }
+        if request.get("tools"):
+            chat_params["tools"] = request["tools"]
+        response = self.client.chat.completions.create(**chat_params).model_dump()
+        response["request"] = chat_params
+        self.llm_response_logger.info(json.dumps(response))
+        return response
 
 
     def send_request(self, request, model) -> dict:
@@ -112,14 +128,42 @@ class MyLLMClient(LLMClient):
             "stop": stop,
         }
         response = self.send_request(request_data, model=model)
-        if response is None or len(response) == 0 or len(response["choices"]) == 0:
-            # print("[MyLLMClient] get_response_str: response is None")
+        if not response or not response.get("choices"):
             return None
-        # print("[MyLLMClient] get_response_str: returning response")
-        # print("[MyLLMClient] get_response_str response: " + response["choices"][0]["message"]["content"])
-        # return response["choices"][0]["message"]["content"]
-        # print("[MyLLMClient] get_response_str response: " + response["choices"][0]["text"])
         return response["choices"][0]["text"]
+
+
+    def get_chat_response(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None = None,
+        temperature: float = 0,
+        max_tokens: int = 800,
+        top_p: float = 0.95,
+        stop: str | None = None,
+        model: str | None = None,
+    ) -> str | None:
+        if model is None:
+            model = self.default_model
+        request_data = {
+            "messages": messages,
+            "tools": tools,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "top_p": top_p,
+            "n": 1,
+            "stream": False,
+            "logprobs": None,
+            "stop": stop,
+        }
+        response = self.send_chat_request(request_data, model=model)
+        if not response or not response.get("choices"):
+            return None
+        if response["choices"][0]["message"].get("tool_calls"):
+            chat_response = format_tool_call_as_str(response["choices"][0]["message"]["tool_calls"][0])
+        else:
+            chat_response = response["choices"][0]["message"]["content"].replace("__", ".", 1)
+        return chat_response
 
 
 llm_client: LLMClient | None = None

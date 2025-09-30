@@ -28,10 +28,11 @@ pyright: ## Run pyright
 test: ## Run tests
 	python -m pytest $(TEST_DIRS)
 
+BACKEND_PORT ?= 8000
 AGENT_CONF := src/async_collab/scenarios/people_join_qa/agent_configs/spider_sample.json
 backend: ## Start web server (use after `poetry shell`)
 	echo "Using conf file: '$(AGENT_CONF)'"
-	hypercorn "async_collab.api:app('$(AGENT_CONF)')"
+	hypercorn "async_collab.api:app('$(AGENT_CONF)')" -b 0.0.0.0:$(BACKEND_PORT)
 
 # https://marmelab.com/blog/2016/02/29/auto-documented-makefile.html
 help: ## Print this help text.

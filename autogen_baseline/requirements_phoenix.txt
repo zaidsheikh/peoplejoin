@@ -1,0 +1,6 @@
+opentelemetry-sdk
+opentelemetry-exporter-otlp
+openinference-instrumentation-openai
+openinference-instrumentation-autogen-agentchat
+arize-phoenix-otel
+# arize-phoenix
