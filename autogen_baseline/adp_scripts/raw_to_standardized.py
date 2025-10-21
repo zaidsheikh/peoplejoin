@@ -16,14 +16,34 @@ def convert_step(step: dict[str, str]) -> list[Action | Observation]:
                 name="user",
             )
         ]
-    else:
+    elif step["role"] == "user":
+        if step.get("name") == "user":
+            return [
+                TextObservation(
+                    content=step["content"],
+                    source="user",
+                    name="user",
+                )
+            ]
+        else:
+            content = f"{step['name']}: {step['content']}" if step.get("name") else step["content"]
+            return [
+                TextObservation(
+                    content=content,
+                    source="environment",
+                    name=step.get("name"),
+                )
+            ]
+    elif step["role"] == "assistant":
         return [
             TextObservation(
                 content=step["content"],
-                source="agent" if step["role"] == "assistant" else step["role"],
+                source="agent",
                 name=step.get("name"),
             )
         ]
+    else:
+        raise ValueError(f"Unknown role: {step['role']}")
 
 
 def remove_thinking_content(text: str) -> str:
