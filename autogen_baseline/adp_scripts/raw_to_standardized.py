@@ -2,22 +2,28 @@ import json
 import sys
 
 from schema.action.action import Action
-from schema.action.message import MessageAction
 from schema.observation.observation import Observation
 from schema.observation.text import TextObservation
 from schema.trajectory import Trajectory
 
 
 def convert_step(step: dict[str, str]) -> list[Action | Observation]:
-    if step["role"] == "user":
-        # TODO: need to add "name" field to TextObservation
-        return [TextObservation(content=f"{step['name']}: {step['content']}", source=step["role"])]
-    elif step["role"] == "assistant":
-        return [MessageAction(content=step["content"])]
-    elif step["role"] == "system":
-        return []
+    if step["role"] == "system":
+        return [
+            TextObservation(
+                content=step["content"],
+                source="user",
+                name="user",
+            )
+        ]
     else:
-        raise ValueError(f"Unknown role: {step['role']}")
+        return [
+            TextObservation(
+                content=step["content"],
+                source="agent" if step["role"] == "assistant" else step["role"],
+                name=step.get("name"),
+            )
+        ]
 
 
 for line in sys.stdin:

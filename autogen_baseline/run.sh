@@ -7,8 +7,9 @@ export LLM_BASE_URL=${LLM_BASE_URL:-"https://api.fireworks.ai/inference/v1"}
 
 mkdir -p output/
 
-grep -w movie_1_84 ../data/peoplejoin-qa/test.jsonl | jq -r '[.question, .datum_id, .tenant_id] | @tsv' | \
+cat ../data/peoplejoin-qa/dev.jsonl | jq -r '[.question, .datum_id, .tenant_id] | @tsv' | \
 while IFS=$'\t' read -r question datum_id tenant_id; do
+    [ -f output/${datum_id}_main.log ] && echo "Skipping ${datum_id} as output file already exists" && continue
     python main.py \
         --groupchat_type graph \
         --output_dir output/ \

@@ -240,6 +240,8 @@ async def main() -> None:
         model=args.primary_llm_model,
         api_key=args.llm_api_key,
         base_url=args.llm_base_url,
+        temperature=0.6, # Qwen/Qwen3-235B-A22B-Thinking-2507-FP8
+        top_p=0.95, # Qwen/Qwen3-235B-A22B-Thinking-2507-FP8
         model_info={
             # "family": ModelFamily.GPT_41,
             "family": ModelFamily.R1, # TODO hack: using R1 for qwen3 to take advantage of parse_r1_content()
@@ -255,6 +257,8 @@ async def main() -> None:
         model=args.default_llm_model,
         api_key=args.llm_api_key,
         base_url=args.llm_base_url,
+        temperature=0.7, # Qwen/Qwen3-235B-A22B-Instruct-2507
+        top_p=0.8, # Qwen/Qwen3-235B-A22B-Instruct-2507
         model_info={
             # "family": ModelFamily.GPT_41,
             "family": ModelFamily.UNKNOWN,
