@@ -26,11 +26,11 @@ def convert_step(step: dict[str, str]) -> list[Action | Observation]:
                 )
             ]
         else:
-            content = f"{step['name']}: {step['content']}" if step.get("name") else step["content"]
+            content = f"Response from @{step['name']}:\n{step['content']}" if step.get("name") else step["content"]
             return [
                 TextObservation(
                     content=content,
-                    source="environment",
+                    source="user",
                     name=step.get("name"),
                 )
             ]
