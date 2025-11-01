@@ -67,8 +67,10 @@ def initialize_agents(
         "If you need information from multiple agents, reach out to them one at a time.\n"
         "After you have gathered enough information from the agents, provide a final answer.\n"
         "Your final answer should start with 'Final Answer: <your answer>'.\n"
+        "Do not include the text 'Final Answer:' in any other messages except for your final answer.\n"
         "Here are the available agents and their descriptions:\n"
         f"{agent_descriptions}\n"
+        "/no_think\n"
     )
 
     # Instructions for regular agents
@@ -77,6 +79,7 @@ def initialize_agents(
         "When contacted by the orchestrator or other agents, provide specific relevant information from your documents if available.\n"
         "If you do not have enough information to fully answer a question, let the requester know what information you need or what relevant information you do have.\n"
         f"{'Always send your message first, then handoff back to the orchestrator.' if enable_handoffs else ''}\n"
+        "/no_think\n"
     )
 
     for agent_name, agent_info in agents.items():
@@ -170,6 +173,11 @@ def parse_args():
         default=os.environ.get("LLM_BASE_URL", "https://cmu.litellm.ai"),
     )
     parser.add_argument(
+        "--llm_base_url_other_agents",
+        type=str,
+        default=os.environ.get("LLM_BASE_URL_OTHER"),
+    )
+    parser.add_argument(
         "--output_dir",
         type=Path,
         default=Path("output"),
@@ -215,8 +223,12 @@ async def main() -> None:
     if not args.primary_llm_model:
         args.primary_llm_model = args.default_llm_model
 
+    if not args.llm_base_url_other_agents:
+        args.llm_base_url_other_agents = args.llm_base_url
+
     print(f"Using LLM model: {args.primary_llm_model}, {args.default_llm_model}")
     print(f"LLM base URL: {args.llm_base_url}")
+    print(f"LLM base URL: {args.llm_base_url_other_agents}")
     print(f"Datum ID: {args.datum_id}")
     print(f"Tenant ID: {args.tenant_id}")
 
@@ -256,12 +268,13 @@ async def main() -> None:
     other_agents_model_client = OpenAIChatCompletionClient(
         model=args.default_llm_model,
         api_key=args.llm_api_key,
-        base_url=args.llm_base_url,
+        base_url=args.llm_base_url_other_agents,
         temperature=0.7, # Qwen/Qwen3-235B-A22B-Instruct-2507
         top_p=0.8, # Qwen/Qwen3-235B-A22B-Instruct-2507
         model_info={
             # "family": ModelFamily.GPT_41,
-            "family": ModelFamily.UNKNOWN,
+            #"family": ModelFamily.UNKNOWN,
+            "family": ModelFamily.R1, # TODO hack: using R1 for qwen3 to take advantage of parse_r1_content()
             "vision": False,
             "function_calling": True,
             "json_output": False,

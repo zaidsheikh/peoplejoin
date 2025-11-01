@@ -3,6 +3,7 @@ import logging
 import warnings
 from collections.abc import AsyncGenerator, Sequence
 from pathlib import Path
+from typing import Any, cast
 
 from autogen_agentchat.agents import MessageFilterAgent
 from autogen_agentchat.base import Response
@@ -184,14 +185,31 @@ class OrderedMessageFilterAgent(MessageFilterAgent):
         # Return messages in their original order, but only those whose indices should be kept
         return [messages[i] for i in sorted(indices_to_keep)]
 
+    def _prefix_message_content(self, message: BaseChatMessage) -> BaseChatMessage:
+        """Prefix the message content with the agent name, if not already prefixed."""
+        prefix = f"Response from @{self.name}:\n"
+        # Only attempt to prefix if content is a string
+        try:
+            msg_any = cast(Any, message)
+            content = getattr(msg_any, "content", None)
+            if isinstance(content, str) and not content.startswith(prefix):
+                msg_any.content = prefix + content  # type: ignore[attr-defined]
+        except Exception:
+            # Be conservative; if any unexpected structure, do not modify content
+            pass
+        return message
+
     def _update_message_source(self, message: BaseChatMessage) -> BaseChatMessage:
-        """Update the source of a message if it matches the wrapped agent's name."""
+        """Update the source of a message and ensure prefix is applied for this agent's responses."""
         if message.source == self._wrapped_agent.name:
             message.source = self.name
+        # Also handle the case where the wrapped agent may already emit with self.name
+        if message.source == self.name:
+            message = self._prefix_message_content(message)
         return message
 
     def _update_response_sources(self, response: Response) -> Response:
-        """Update sources in a Response object."""
+        """Update sources in a Response object and prefix content."""
         if response.chat_message:
             response.chat_message = self._update_message_source(response.chat_message)
 
