@@ -1,2 +1,7 @@
 autogen-agentchat==0.7.4
 autogen-ext[openai]
+absl-py
+nltk
+numpy
+six
+rouge-score
