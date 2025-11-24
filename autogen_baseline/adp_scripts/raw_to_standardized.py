@@ -17,16 +17,20 @@ def convert_step(step: dict[str, str]) -> list[Action | Observation]:
             )
         ]
     elif step["role"] == "user":
-        if step.get("name") == "user":
+        if step.get("name") in ["user", "orchestrator"]:
             return [
                 TextObservation(
                     content=step["content"],
                     source="user",
-                    name="user",
+                    name=step.get("name"),
                 )
             ]
         else:
-            content = f"Response from @{step['name']}:\n{step['content']}" if step.get("name") else step["content"]
+            if step.get("name"):
+                prefix = f"Response from @{step['name']}:"
+                content = f"{prefix}\n{step['content']}" if not step["content"].startswith(prefix) else step["content"]
+            else:
+                content = step["content"]
             return [
                 TextObservation(
                     content=content,
@@ -39,7 +43,7 @@ def convert_step(step: dict[str, str]) -> list[Action | Observation]:
             TextObservation(
                 content=step["content"],
                 source="agent",
-                name=step.get("name"),
+                name=step.get("name", "orchestrator"),
             )
         ]
     else:
@@ -60,15 +64,25 @@ for line in sys.stdin:
     final_message = raw_data["response"]["choices"][0]["message"]
     assert final_message["role"] == "assistant"
 
-    final_response = remove_thinking_content(final_message["content"])
+    if final_message["content"] is not None:
+        final_response = remove_thinking_content(final_message["content"])
 
-    content += [
-        TextObservation(
-            content=final_response,
-            source="agent",
-            name=None,
-        )
-    ]
+        content += [
+            TextObservation(
+                content=final_response,
+                source="agent",
+                name=None,
+            )
+        ]
+    else:
+        print(f"No final response in {raw_data["datum_id"]}", file=sys.stderr)
 
-    standardized_data = Trajectory(id=raw_data["datum_id"], content=content)
+    standardized_data = Trajectory(
+        id=raw_data["datum_id"],
+        content=content,
+        details={
+            "datum_id": raw_data["datum_id"],
+            "agent_id": raw_data["agent_id"],
+        }
+    )
     print(standardized_data.model_dump_json())

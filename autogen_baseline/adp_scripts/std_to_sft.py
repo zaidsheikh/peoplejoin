@@ -11,8 +11,6 @@ from schema.observation.text import TextObservation
 from schema.observation.web import WebObservation
 from schema.trajectory import Trajectory
 
-dataset = os.getenv("MY_DATASET")
-assert dataset, "Please set the environment variable MY_DATASET"
 
 
 def get_system_message() -> str:
@@ -42,15 +40,20 @@ def standardized_event_to_message(
 
 
 def process_row(line):
-    std_dataset = [json.loads(line)]
-    std_data = std_dataset[0]
-    trajectory = Trajectory(**std_data)
+    trajectory = Trajectory(**json.loads(line))
     id = trajectory.id
     system_message = get_system_message()
     events = trajectory.content
     conversations = []
     for i in range(len(events)):
         event = events[i]
+        if (
+            event.name == "user"
+            and not event.content.strip().startswith("You are")
+            and not trajectory.details["agent_id"].startswith("orchestrator_")
+        ):
+            # Don't include the initial user message in non-orchestator-agent trajectories
+            continue
         try:
             message = standardized_event_to_message(id, event)
             # HACK: ADP puts the dataset-specific system message as the first user message
@@ -71,20 +74,10 @@ def process_row(line):
 
 
 def main():
-    count = 0
     for line in sys.stdin:
         output_line = process_row(line)
         if output_line:
-            with open(f"datasets/{dataset}/full_sft.jsonl", "a") as f:
-                try:
-                    f.write(json.dumps(output_line) + "\n")
-                except Exception as e:
-                    traceback.print_exc()
-                    print(e)
-                    continue
-        count += 1
-        if count % 10000 == 0:
-            print(count, file=sys.stderr)
+            print(json.dumps(output_line))
 
 
 if __name__ == "__main__":

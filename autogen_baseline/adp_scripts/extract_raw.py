@@ -13,10 +13,11 @@ if not os.path.isdir(input_dir):
     print(f"Error: {input_dir} is not a directory")
     sys.exit(1)
 
+agent_id_included = set()
 for file_path in glob.glob(os.path.join(input_dir, "*_llm_calls.jsonl")):
-    # the last llm call by orchestrator should have the full conversation history
+    # only look at the final llm call of an agent since that has the full conversation history
     for line in reversed(Path(file_path).read_text().splitlines()):
         llm_call = json.loads(line)
-        if llm_call["agent_id"].startswith("orchestrator_"):
+        if llm_call["agent_id"] not in agent_id_included:
             print(json.dumps(llm_call))
-            break
+            agent_id_included.add(llm_call["agent_id"])
