@@ -19,8 +19,8 @@ def get_args():
     parser.add_argument(
         "--reference_file",
         type=Path,
-        help="Path to the reference jsonl file",
-        default=Path(__file__).parent.parent / "data" / "peoplejoin-doc-creation" / "test.scenario.jsonl",
+        help="Path to the reference jsonl file (default: data/peoplejoin-doc-creation/test.scenario.jsonl)",
+        default=Path(__file__).resolve().parent.parent / "data" / "peoplejoin-doc-creation" / "test.scenario.jsonl",
     )
     parser.add_argument(
         "--output_file",
@@ -61,6 +61,9 @@ if __name__ == "__main__":
 
     references = load_references(args.reference_file)
     hypotheses = load_hypotheses(args.input_dir)
+    if not hypotheses:
+        print("No hypotheses found. Make sure the input directory contains *_autogen_messages.jsonl files.")
+        exit(1)
 
     rouge_lsum_scores: dict[str, dict[str, float]] = {}
     for datum_id, reference in references.items():
