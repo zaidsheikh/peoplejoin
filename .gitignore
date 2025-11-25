@@ -2,3 +2,6 @@
 workspace/**/*.json
 __pycache__
 autogen_baseline/output/
+autogen_baseline/output_*
+autogen_baseline/data/
+logs/
