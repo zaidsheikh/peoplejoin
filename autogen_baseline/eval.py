@@ -83,7 +83,7 @@ def parse_args():
     parser.add_argument(
         "--ground_truth",
         type=Path,
-        default=Path(__file__).parent.parent / "data" / "peoplejoin-qa" / "test.jsonl",
+        default=Path(__file__).resolve().parent.parent / "data" / "peoplejoin-qa" / "test.jsonl",
     )
     parser.add_argument("--saved_outputs_folder", type=Path, required=True)
     parser.add_argument("--metrics_file", type=Path, required=True, help="JSONL file to save the computed metrics, if file exists, will append to it, processed datum_id will be skipped")

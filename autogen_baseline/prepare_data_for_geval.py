@@ -21,12 +21,12 @@ def get_args():
         "--reference_file",
         type=Path,
         help="Path to the reference jsonl file",
-        default=Path(__file__).parent.parent / "data" / "peoplejoin-doc-creation" / "test.scenario.jsonl",
+        default=Path(__file__).resolve().parent.parent / "data" / "peoplejoin-doc-creation" / "test.scenario.jsonl",
     )
     parser.add_argument(
         "--data_dir",
         type=Path,
-        default=Path(__file__).parent.parent / "data" / "peoplejoin-doc-creation" / "tenants",
+        default=Path(__file__).resolve().parent.parent / "data" / "peoplejoin-doc-creation" / "tenants",
         help="Path to the tenant data directory (default: peoplejoin/data/peoplejoin-doc-creation/tenants)",
     )
     return parser.parse_args()

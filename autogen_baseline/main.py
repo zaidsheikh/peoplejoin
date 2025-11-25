@@ -210,7 +210,7 @@ def parse_args():
     parser.add_argument(
         "--data_dir",
         type=Path,
-        default=Path(__file__).parent.parent / "data" / "peoplejoin-qa",
+        default=Path(__file__).resolve().parent.parent / "data" / "peoplejoin-qa",
         help="Path to the tenant data directory (default: peoplejoin/data/peoplejoin-qa)",
     )
     return parser.parse_args()
