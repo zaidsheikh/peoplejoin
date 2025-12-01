@@ -38,7 +38,8 @@ def initialize_agents(
     agents: dict,
     primary_agent_model_client: OpenAIChatCompletionClient,
     other_agents_model_client: OpenAIChatCompletionClient,
-    enable_handoffs: bool
+    enable_handoffs: bool,
+    enable_thinking: bool = False,
 ) -> None:
     # Create the orchestrator agent first
     all_agent_names = list(agents.keys())
@@ -62,7 +63,7 @@ def initialize_agents(
         "Do not include the text 'Final Summary:' in any other messages except in your final response.\n"
         "Here are the available agents and the document topics they cover:\n"
         f"{agent_descriptions}\n"
-        # "/no_think\n"
+        f"{'/no_think' if not enable_thinking else '/think'}\n"
     )
 
     # Instructions for regular agents
@@ -71,7 +72,7 @@ def initialize_agents(
         "When asked, return all documents relevant to the request. Do not summarize.\n"
         "If you do not have relevant documents, provide the requestor with a list of topics your documents do cover.\n"
         f"{'Always send your message first, then handoff back to the orchestrator.' if enable_handoffs else ''}\n"
-        # "/no_think\n"
+        f"{'/no_think' if not enable_thinking else '/think'}\n"
     )
 
     for agent_name, agent_info in agents.items():
@@ -209,6 +210,11 @@ def parse_args():
         action="store_true",
         help="Include previous thoughts in the context sent to the LLM for completions",
     )
+    parser.add_argument(
+        "--enable-thinking",
+        action="store_true",
+        help="Enable the thinking process in the agents",
+    )
     return parser.parse_args()
 
 
@@ -296,7 +302,7 @@ async def main() -> None:
             }
 
     initialize_agents(
-        agents, primary_agent_model_client, other_agents_model_client, enable_handoffs=args.groupchat_type == "swarm"
+        agents, primary_agent_model_client, other_agents_model_client, enable_handoffs=args.groupchat_type == "swarm", enable_thinking=args.enable_thinking
     )
 
 

@@ -1,12 +1,15 @@
 #!/bin/bash
 
-input_dir=$(readlink -ve $1) || { echo "Usage: $0 <input_dir containing *_autogen_messages.jsonl files>"; exit 1; }  
+usage="Usage: $0 <input dir containing *_autogen_messages.jsonl files or jsonl file containing generated messages from the single agent baseline> [output_dir]"
+[ $# -lt 1 ] && { echo "$usage"; exit 1; }
+input_dir_or_file=$(readlink -ve $1) || { echo "$usage"; exit 1; }  
+output_dir=$2
 
-nfiles=$(ls $input_dir/*_autogen_messages.jsonl | wc -l)
-[ $nfiles -eq 0 ] && {
-    echo "Input directory contains no *_autogen_messages.jsonl files"
-    exit 1
-}
+[ -z "$output_dir" ] && output_dir=$(dirname "$input_dir_or_file")
+mkdir -p "$output_dir"
+
+echo "Input data: $input_dir_or_file"
+echo "Using output directory: $output_dir"
 
 if [ ! -d geval ]; then
     git clone https://github.com/nlpyang/geval
@@ -23,15 +26,17 @@ fi
 
 cd $(dirname $0)
 
+
+fprefix=$(basename "$input_dir_or_file" .jsonl)
 set -x
-python prepare_data_for_geval.py $input_dir ${input_dir}/geval_data.json
+python prepare_data_for_geval.py $input_dir_or_file ${output_dir}/${fprefix}_geval_data.json
 
 for mode in coh con rel; do
     python geval/gpt4_eval.py \
         --model azure/gpt-4.1 \
         --prompt_fp geval/prompts/summeval/${mode}_detailed.txt \
-        --summeval_fp ${input_dir}/geval_data.json \
-        --save_fp ${input_dir}/geval_${mode}_results.json
+        --summeval_fp ${output_dir}/${fprefix}_geval_data.json \
+        --save_fp ${output_dir}/${fprefix}_geval_${mode}_results.json
 done
 
-python summarize_geval_results.py ${input_dir}/geval_{coh|con|rel}_results.json > ${input_dir}/geval_summary.csv
+python summarize_geval_scores.py ${output_dir}/${fprefix}_geval_{coh,con,rel}_results.json > ${output_dir}/${fprefix}_geval_summary.csv
